@@ -983,4 +983,169 @@ public function test_store_owner_cannot_update_product_from_another_store(): voi
         'is_featured' => false,
     ]);
 }
+
+public function test_store_owner_can_delete_product_from_own_store(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')
+        ->firstOrFail();
+
+    $user->roles()->attach($role);
+
+    $this->actingAs($user);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = \App\Models\Product::create([
+        'category_id' => $category->id,
+        'name' => 'Nike Air Max',
+        'slug' => 'nike-air-max',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $response = $this->delete(
+        route('products.destroy', $product)
+    );
+
+    $response->assertRedirect(
+        route('categories.index')
+    );
+
+    $this->assertDatabaseMissing('products', [
+        'id' => $product->id,
+    ]);
+}
+
+public function test_user_without_products_delete_permission_cannot_delete_product(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $owner = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($owner);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = \App\Models\Product::create([
+        'category_id' => $category->id,
+        'name' => 'Nike Air Max',
+        'slug' => 'nike-air-max',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    // Même boutique, mais aucune permission products.delete
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $response = $this
+        ->actingAs($user)
+        ->delete(route('products.destroy', $product));
+
+    $response->assertForbidden();
+
+    $this->assertDatabaseHas('products', [
+        'id' => $product->id,
+        'store_id' => $store->id,
+        'slug' => 'nike-air-max',
+    ]);
+}
+
+public function test_store_owner_cannot_delete_product_from_another_store(): void
+{
+    $this->seed();
+
+    $storeA = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $storeB = Store::create([
+        'name' => 'Boutique Beta',
+        'slug' => 'boutique-beta',
+        'status' => 'ACTIVE',
+    ]);
+
+    $userA = User::factory()->create([
+        'store_id' => $storeA->id,
+    ]);
+
+    $userB = User::factory()->create([
+        'store_id' => $storeB->id,
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')
+        ->firstOrFail();
+
+    $userA->roles()->attach($role);
+    $userB->roles()->attach($role);
+
+    // Création du produit dans la boutique B
+    app(TenantContext::class)->setFromUser($userB);
+
+    $categoryB = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $productB = \App\Models\Product::create([
+        'category_id' => $categoryB->id,
+        'name' => 'iPhone Test',
+        'slug' => 'iphone-test',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    // User A tente de supprimer le produit de B
+    app(TenantContext::class)->setFromUser($userA);
+
+    $response = $this
+        ->actingAs($userA)
+        ->delete('/products/' . $productB->id);
+
+    $response->assertNotFound();
+
+    // Le produit de B doit toujours exister
+    $this->assertDatabaseHas('products', [
+        'id' => $productB->id,
+        'store_id' => $storeB->id,
+        'name' => 'iPhone Test',
+        'slug' => 'iphone-test',
+    ]);
+}
 }

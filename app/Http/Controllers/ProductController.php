@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+
+use App\Actions\Product\DeleteProduct;
 use App\Actions\Product\UpdateProduct;
 use App\Http\Requests\UpdateProductRequest;
 use App\Actions\Product\CreateProduct;
@@ -54,5 +56,18 @@ public function update(
     return redirect()
         ->route('products.show', $product)
         ->with('success', 'Produit modifié avec succès.');
+}
+
+public function destroy(
+    Product $product,
+    DeleteProduct $deleteProduct
+): RedirectResponse {
+    Gate::authorize('delete', $product);
+
+    $deleteProduct->execute($product);
+
+    return redirect()
+        ->route('categories.index')
+        ->with('success', 'Produit supprimé avec succès.');
 }
 }

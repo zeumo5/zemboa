@@ -46,9 +46,10 @@ public function view(User $user, Product $product): bool
      * Determine whether the user can delete the model.
      */
     public function delete(User $user, Product $product): bool
-    {
-        return false;
-    }
+{
+    return $user->hasPermission('products.delete')
+        && $user->store_id === $product->store_id;
+}
 
     /**
      * Determine whether the user can restore the model.
