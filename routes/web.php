@@ -1,7 +1,13 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\CategoryController;
 
 Route::get('/', function () {
     return view('welcome');
+});
+
+Route::middleware(['auth', 'tenant'])->group(function () {
+    Route::post('/categories', [CategoryController::class, 'store'])
+        ->name('categories.store');
 });
