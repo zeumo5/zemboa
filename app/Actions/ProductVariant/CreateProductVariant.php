@@ -26,6 +26,17 @@ class CreateProductVariant
     ]);
 }
 
+if (
+    isset($data['promo_price'])
+    && $data['promo_price'] !== null
+    && $data['promo_price'] < 0
+) {
+    throw ValidationException::withMessages([
+        'promo_price' =>
+            'Le prix promotionnel ne peut pas être négatif.',
+    ]);
+}
+
         if (
     isset($data['promo_price'])
     && $data['promo_price'] !== null

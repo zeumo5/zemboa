@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Support\Carbon;
 use Illuminate\Database\QueryException;
 use App\Actions\ProductVariant\CreateProductVariant;
 use Illuminate\Validation\ValidationException;
@@ -467,4 +468,409 @@ public function test_create_product_variant_rejects_negative_price(): void
     ]);
 }
 
+public function test_create_product_variant_rejects_negative_promo_price(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Nike Air Max',
+        'slug' => 'nike-air-max',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $this->expectException(ValidationException::class);
+
+    app(CreateProductVariant::class)->execute([
+        'product_id' => $product->id,
+        'sku' => 'NIKE-001',
+        'price' => 45000,
+        'promo_price' => -5000,
+        'status' => 'ACTIVE',
+        'is_default' => false,
+    ]);
+}
+
+public function test_effective_price_returns_normal_price_without_promotion(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Nike Air Max',
+        'slug' => 'nike-air-max',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'NIKE-001',
+        'price' => 45000,
+        'promo_price' => null,
+        'status' => 'ACTIVE',
+        'is_default' => true,
+    ]);
+
+    $this->assertSame('45000.00', $variant->effectivePrice());
+}
+
+public function test_effective_price_returns_promo_price_when_promotion_has_no_dates(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Nike Air Max',
+        'slug' => 'nike-air-max',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'NIKE-001',
+        'price' => 45000,
+        'promo_price' => 39900,
+        'status' => 'ACTIVE',
+        'is_default' => true,
+    ]);
+
+    $this->assertSame('39900.00', $variant->effectivePrice());
+}
+
+public function test_effective_price_returns_normal_price_before_promotion_starts(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Nike Air Max',
+        'slug' => 'nike-air-max',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'NIKE-001',
+        'price' => 45000,
+        'promo_price' => 39900,
+        'promo_starts_at' => '2026-10-10 00:00:00',
+        'status' => 'ACTIVE',
+        'is_default' => true,
+    ]);
+
+    $at = Carbon::parse('2026-10-09 12:00:00');
+
+    $this->assertSame(
+        '45000.00',
+        $variant->effectivePrice($at)
+    );
+}
+
+public function test_effective_price_returns_normal_price_after_promotion_ends(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Nike Air Max',
+        'slug' => 'nike-air-max',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'NIKE-001',
+        'price' => 45000,
+        'promo_price' => 39900,
+        'promo_starts_at' => '2026-10-10 00:00:00',
+        'promo_ends_at' => '2026-10-20 23:59:59',
+        'status' => 'ACTIVE',
+        'is_default' => true,
+    ]);
+
+    $at = Carbon::parse('2026-10-21 12:00:00');
+
+    $this->assertSame(
+        '45000.00',
+        $variant->effectivePrice($at)
+    );
+}
+
+public function test_effective_price_returns_promo_price_during_promotion(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Nike Air Max',
+        'slug' => 'nike-air-max',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'NIKE-001',
+        'price' => 45000,
+        'promo_price' => 39900,
+        'promo_starts_at' => '2026-10-10 00:00:00',
+        'promo_ends_at' => '2026-10-20 23:59:59',
+        'status' => 'ACTIVE',
+        'is_default' => true,
+    ]);
+
+    $at = Carbon::parse('2026-10-15 12:00:00');
+
+    $this->assertSame(
+        '39900.00',
+        $variant->effectivePrice($at)
+    );
+}
+
+public function test_effective_price_returns_promo_price_when_only_end_date_is_defined(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Nike Air Max',
+        'slug' => 'nike-air-max',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'NIKE-001',
+        'price' => 45000,
+        'promo_price' => 39900,
+        'promo_ends_at' => '2026-10-20 23:59:59',
+        'status' => 'ACTIVE',
+        'is_default' => true,
+    ]);
+
+    $at = Carbon::parse('2026-10-15 12:00:00');
+
+    $this->assertSame(
+        '39900.00',
+        $variant->effectivePrice($at)
+    );
+}
+
+public function test_effective_price_returns_promo_price_when_only_start_date_has_been_reached(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Nike Air Max',
+        'slug' => 'nike-air-max',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'NIKE-001',
+        'price' => 45000,
+        'promo_price' => 39900,
+        'promo_starts_at' => '2026-10-10 00:00:00',
+        'status' => 'ACTIVE',
+        'is_default' => true,
+    ]);
+
+    $at = Carbon::parse('2026-10-15 12:00:00');
+
+    $this->assertSame(
+        '39900.00',
+        $variant->effectivePrice($at)
+    );
+}
+
+public function test_effective_price_includes_promotion_start_and_end_boundaries(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Nike Air Max',
+        'slug' => 'nike-air-max',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'NIKE-001',
+        'price' => 45000,
+        'promo_price' => 39900,
+        'promo_starts_at' => '2026-10-10 00:00:00',
+        'promo_ends_at' => '2026-10-20 23:59:59',
+        'status' => 'ACTIVE',
+        'is_default' => true,
+    ]);
+
+    $this->assertSame(
+        '39900.00',
+        $variant->effectivePrice(
+            Carbon::parse('2026-10-10 00:00:00')
+        )
+    );
+
+    $this->assertSame(
+        '39900.00',
+        $variant->effectivePrice(
+            Carbon::parse('2026-10-20 23:59:59')
+        )
+    );
+}
 }

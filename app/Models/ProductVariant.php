@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
+use Illuminate\Support\Carbon;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use App\Models\Concerns\BelongsToStore;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -35,6 +37,33 @@ class ProductVariant extends Model
     )->withTimestamps();
 }
 
+public function effectivePrice(?CarbonInterface $at = null): string
+{
+    if ($this->promo_price === null) {
+        return $this->price;
+    }
+
+    $at ??= Carbon::now();
+
+    if (
+        $this->promo_starts_at !== null
+        && $at->lt($this->promo_starts_at)
+    ) {
+        return $this->price;
+    }
+
+    if (
+        $this->promo_ends_at !== null
+        && $at->gt($this->promo_ends_at)
+    ) {
+        return $this->price;
+    }
+
+    return $this->promo_price;
+}
+
+    
+
     protected function casts(): array
     {
         return [
@@ -45,4 +74,6 @@ class ProductVariant extends Model
             'is_default' => 'boolean',
         ];
     }
+
+    
 }
