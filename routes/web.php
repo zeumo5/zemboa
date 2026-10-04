@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ProductController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CategoryController;
 
@@ -19,4 +20,10 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     
     Route::delete('/categories/{category}', [CategoryController::class, 'destroy'])
     ->name('categories.destroy');
+
+    Route::post('/products', [ProductController::class, 'store'])
+    ->name('products.store');
+
+Route::get('/products/{product}', [ProductController::class, 'show'])
+    ->name('products.show');
 });

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Permission;
+use App\Models\Role;
 use Illuminate\Database\QueryException;
 use App\Actions\Product\CreateProduct;
 use Illuminate\Validation\ValidationException;
@@ -498,5 +500,28 @@ public function test_product_creation_is_rolled_back_when_default_variant_creati
 
     $this->assertDatabaseCount('products', 1);
     $this->assertDatabaseCount('product_variants', 1);
+}
+
+public function test_user_with_products_create_permission_can_create_product(): void
+{
+    $permission = Permission::create([
+        'name' => 'Create products',
+        'code' => 'products.create',
+    ]);
+
+    $role = Role::create([
+        'name' => 'Store Owner',
+        'code' => 'STORE_OWNER',
+    ]);
+
+    $role->permissions()->attach($permission);
+
+    $user = User::factory()->create();
+
+    $user->roles()->attach($role);
+
+    $this->assertTrue(
+        $user->can('create', Product::class)
+    );
 }
 }
