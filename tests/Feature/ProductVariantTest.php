@@ -343,4 +343,128 @@ public function test_duplicate_variant_sku_is_rejected_in_same_store(): void
     ]);
 }
 
+public function test_create_product_variant_rejects_promo_price_greater_than_or_equal_to_price(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Nike Air Max',
+        'slug' => 'nike-air-max',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $this->expectException(ValidationException::class);
+
+    app(CreateProductVariant::class)->execute([
+        'product_id' => $product->id,
+        'sku' => 'NIKE-001',
+        'price' => 45000,
+        'promo_price' => 50000,
+        'status' => 'ACTIVE',
+        'is_default' => false,
+    ]);
+}
+
+public function test_create_product_variant_rejects_promo_end_before_promo_start(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Nike Air Max',
+        'slug' => 'nike-air-max',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $this->expectException(ValidationException::class);
+
+    app(CreateProductVariant::class)->execute([
+        'product_id' => $product->id,
+        'sku' => 'NIKE-001',
+        'price' => 45000,
+        'promo_price' => 39900,
+
+        // Incohérent volontairement
+        'promo_starts_at' => '2026-10-20 00:00:00',
+        'promo_ends_at' => '2026-10-10 00:00:00',
+
+        'status' => 'ACTIVE',
+        'is_default' => false,
+    ]);
+}
+
+public function test_create_product_variant_rejects_negative_price(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Nike Air Max',
+        'slug' => 'nike-air-max',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $this->expectException(ValidationException::class);
+
+    app(CreateProductVariant::class)->execute([
+        'product_id' => $product->id,
+        'sku' => 'NIKE-001',
+        'price' => -5000,
+        'status' => 'ACTIVE',
+        'is_default' => false,
+    ]);
+}
+
 }
