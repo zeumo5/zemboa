@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ProductVariantController;
 use App\Http\Controllers\ProductController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CategoryController;
@@ -32,4 +33,9 @@ Route::get('/products/{product}', [ProductController::class, 'show'])
 
     Route::delete('/products/{product}', [ProductController::class, 'destroy'])
     ->name('products.destroy');
+
+    Route::post(
+    '/products/{product}/variants',
+    [ProductVariantController::class, 'store']
+)->name('product-variants.store');
 });

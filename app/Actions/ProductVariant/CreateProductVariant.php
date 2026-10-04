@@ -2,6 +2,7 @@
 
 namespace App\Actions\ProductVariant;
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 use App\Models\Product;
 use App\Models\ProductVariant;
@@ -63,6 +64,29 @@ if (
     }
 }
 
-        return ProductVariant::create($data);
+       return DB::transaction(function () use ($data, $product) {
+    $hasVariants = ProductVariant::query()
+        ->where('product_id', $product->id)
+        ->exists();
+
+    // La première variante d'un produit devient automatiquement
+    // sa variante par défaut.
+    if (! $hasVariants) {
+        $data['is_default'] = true;
+    }
+
+    // Si la nouvelle variante devient celle par défaut,
+    // les anciennes ne doivent plus l'être.
+    if ($data['is_default'] ?? false) {
+        ProductVariant::query()
+            ->where('product_id', $product->id)
+            ->where('is_default', true)
+            ->update([
+                'is_default' => false,
+            ]);
+    }
+
+    return ProductVariant::create($data);
+});
     }
 }
