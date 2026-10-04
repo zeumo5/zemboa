@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Category\DeleteCategory;
 use App\Actions\Category\UpdateCategory;
 use App\Http\Requests\UpdateCategoryRequest;
 use App\Actions\Category\CreateCategory;
@@ -56,6 +57,19 @@ public function index(): JsonResponse
     return response()->json([
         'message' => 'Catégorie modifiée avec succès.',
         'data' => $category,
+    ]);
+}
+
+public function destroy(
+    Category $category,
+    DeleteCategory $deleteCategory
+): JsonResponse {
+    Gate::authorize('delete', $category);
+
+    $deleteCategory->execute($category);
+
+    return response()->json([
+        'message' => 'Catégorie supprimée avec succès.',
     ]);
 }
 }
