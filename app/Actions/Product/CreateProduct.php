@@ -2,8 +2,11 @@
 
 namespace App\Actions\Product;
 
+use Illuminate\Support\Str;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductVariant;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class CreateProduct
@@ -15,10 +18,58 @@ class CreateProduct
 
         if ($category === null) {
             throw ValidationException::withMessages([
-                'category_id' => 'La catégorie sélectionnée n’appartient pas à cette boutique.',
+                'category_id' =>
+                    'La catégorie sélectionnée n’appartient pas à cette boutique.',
             ]);
         }
 
-        return Product::create($data);
+        $defaultVariant = $data['default_variant'] ?? null;
+
+        if ($defaultVariant === null) {
+            throw ValidationException::withMessages([
+                'default_variant' =>
+                    'Une variante par défaut est obligatoire.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($data, $defaultVariant) {
+            // default_variant n'est pas une colonne de products.
+            $productData = $data;
+            unset($productData['default_variant']);
+
+            $product = Product::create($productData);
+
+            $sku = $defaultVariant['sku'] ?? null;
+
+if (blank($sku)) {
+    $prefix = Str::upper(
+        Str::substr(
+            preg_replace('/[^A-Za-z0-9]/', '', $product->name),
+            0,
+            3
+        )
+    );
+
+    $prefix = $prefix !== '' ? $prefix : 'PRD';
+
+    do {
+        $sku = $prefix . '-' . Str::upper(Str::random(6));
+    } while (
+        ProductVariant::query()
+            ->where('sku', $sku)
+            ->exists()
+    );
+}
+
+            ProductVariant::create([
+                'product_id' => $product->id,
+                'sku' => $sku,
+                'price' => $defaultVariant['price'],
+                'is_default' => true,
+                'status' => 'ACTIVE',
+            ]);
+
+            return $product;
+        });
     }
 }

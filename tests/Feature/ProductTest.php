@@ -328,4 +328,175 @@ public function test_duplicate_product_slug_is_rejected_in_same_store(): void
         'is_featured' => false,
     ]);
 }
+
+public function test_create_product_also_creates_default_variant(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = app(CreateProduct::class)->execute([
+        'category_id' => $category->id,
+        'name' => 'Nike Air Max',
+        'slug' => 'nike-air-max',
+        'description' => 'Chaussure de sport',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+
+        'default_variant' => [
+            'price' => 45000,
+            'sku' => 'NIKE-AM-001',
+        ],
+    ]);
+
+    $this->assertDatabaseHas('products', [
+        'id' => $product->id,
+        'store_id' => $store->id,
+        'slug' => 'nike-air-max',
+    ]);
+
+    $this->assertDatabaseHas('product_variants', [
+        'store_id' => $store->id,
+        'product_id' => $product->id,
+        'sku' => 'NIKE-AM-001',
+        'price' => 45000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    $this->assertCount(1, $product->variants);
+
+    $this->assertTrue(
+        $product->variants->first()->is_default
+    );
+}
+
+public function test_create_product_generates_sku_when_missing(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = app(CreateProduct::class)->execute([
+        'category_id' => $category->id,
+        'name' => 'Nike Air Max',
+        'slug' => 'nike-air-max',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+
+        'default_variant' => [
+            'price' => 45000,
+        ],
+    ]);
+
+    $variant = $product->variants()->first();
+
+    $this->assertNotNull($variant);
+
+    $this->assertNotEmpty(
+        $variant->sku
+    );
+
+    $this->assertTrue(
+        $variant->is_default
+    );
+
+    $this->assertSame(
+        $store->id,
+        $variant->store_id
+    );
+}
+
+public function test_product_creation_is_rolled_back_when_default_variant_creation_fails(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    // Premier produit : utilise ce SKU.
+    app(CreateProduct::class)->execute([
+        'category_id' => $category->id,
+        'name' => 'Premier Produit',
+        'slug' => 'premier-produit',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+
+        'default_variant' => [
+            'price' => 45000,
+            'sku' => 'SKU-UNIQUE-001',
+        ],
+    ]);
+
+    try {
+        // Deuxième produit : même SKU → la variante doit échouer.
+        app(CreateProduct::class)->execute([
+            'category_id' => $category->id,
+            'name' => 'Produit à annuler',
+            'slug' => 'produit-a-annuler',
+            'status' => 'ACTIVE',
+            'is_featured' => false,
+
+            'default_variant' => [
+                'price' => 50000,
+                'sku' => 'SKU-UNIQUE-001',
+            ],
+        ]);
+
+        $this->fail(
+            'La création de la variante aurait dû échouer à cause du SKU dupliqué.'
+        );
+    } catch (\Illuminate\Database\QueryException $exception) {
+        // Échec attendu.
+    }
+
+    $this->assertDatabaseMissing('products', [
+        'slug' => 'produit-a-annuler',
+        'store_id' => $store->id,
+    ]);
+
+    $this->assertDatabaseCount('products', 1);
+    $this->assertDatabaseCount('product_variants', 1);
+}
 }
