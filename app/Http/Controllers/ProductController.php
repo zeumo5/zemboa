@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Product\UpdateProduct;
+use App\Http\Requests\UpdateProductRequest;
 use App\Actions\Product\CreateProduct;
 use App\Http\Requests\StoreProductRequest;
 use App\Models\Product;
@@ -35,5 +37,22 @@ public function show(Product $product)
         'name' => $product->name,
         'slug' => $product->slug,
     ]);
+}
+
+public function update(
+    UpdateProductRequest $request,
+    Product $product,
+    UpdateProduct $updateProduct
+): RedirectResponse {
+    Gate::authorize('update', $product);
+
+    $product = $updateProduct->execute(
+        $product,
+        $request->validated()
+    );
+
+    return redirect()
+        ->route('products.show', $product)
+        ->with('success', 'Produit modifié avec succès.');
 }
 }

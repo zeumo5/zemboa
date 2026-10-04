@@ -37,9 +37,10 @@ public function view(User $user, Product $product): bool
      * Determine whether the user can update the model.
      */
     public function update(User $user, Product $product): bool
-    {
-        return false;
-    }
+{
+    return $user->hasPermission('products.update')
+        && $user->store_id === $product->store_id;
+}
 
     /**
      * Determine whether the user can delete the model.
