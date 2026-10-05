@@ -2440,4 +2440,177 @@ public function test_user_without_products_update_permission_cannot_delete_varia
         'sku' => 'IPH17-256',
     ]);
 }
+
+public function test_variant_can_be_created_with_only_promo_end_date(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')->firstOrFail();
+    $user->roles()->attach($role);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $response = $this
+        ->actingAs($user)
+        ->post(
+            route('product-variants.store', $product),
+            [
+                'sku' => 'IPH17-128',
+                'price' => 550000,
+                'promo_price' => 500000,
+                'promo_ends_at' => '2026-10-20 23:59:59',
+                'status' => 'ACTIVE',
+            ]
+        );
+
+    $response->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('product_variants', [
+        'product_id' => $product->id,
+        'sku' => 'IPH17-128',
+        'price' => 550000,
+        'promo_price' => 500000,
+    ]);
+}
+
+public function test_variant_can_be_created_with_only_promo_start_date(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')->firstOrFail();
+    $user->roles()->attach($role);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $response = $this
+        ->actingAs($user)
+        ->post(
+            route('product-variants.store', $product),
+            [
+                'sku' => 'IPH17-128',
+                'price' => 550000,
+                'promo_price' => 500000,
+                'promo_starts_at' => '2026-10-20 08:00:00',
+                'status' => 'ACTIVE',
+            ]
+        );
+
+    $response->assertSessionHasNoErrors();
+
+    $this->assertDatabaseHas('product_variants', [
+        'product_id' => $product->id,
+        'sku' => 'IPH17-128',
+        'price' => 550000,
+        'promo_price' => 500000,
+    ]);
+}
+
+public function test_default_variant_cannot_be_disabled_with_string_zero(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')->firstOrFail();
+    $user->roles()->attach($role);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-128',
+        'price' => 550000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    $response = $this
+        ->actingAs($user)
+        ->put(
+            route('product-variants.update', $variant),
+            [
+                'sku' => 'IPH17-128',
+                'price' => 550000,
+                'is_default' => '0',
+                'status' => 'ACTIVE',
+            ]
+        );
+
+    $response->assertSessionHasErrors('is_default');
+
+    $this->assertDatabaseHas('product_variants', [
+        'id' => $variant->id,
+        'is_default' => true,
+    ]);
+}
 }

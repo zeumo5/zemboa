@@ -59,7 +59,7 @@ if (
 if (
     $variant->is_default
     && array_key_exists('is_default', $data)
-    && $data['is_default'] === false
+    && in_array($data['is_default'], [false, 0, '0'], true)
 ) {
     throw ValidationException::withMessages([
         'is_default' =>
