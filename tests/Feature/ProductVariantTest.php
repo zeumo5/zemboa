@@ -2086,7 +2086,8 @@ public function test_non_default_variant_can_be_deleted_when_another_variant_exi
         'status' => 'ACTIVE',
     ]);
 
-    $variant = ProductVariant::create([
+    $variant = app(\App\Actions\ProductVariant\CreateProductVariant::class)
+    ->execute([
         'product_id' => $product->id,
         'sku' => 'IPH17-256',
         'price' => 650000,
@@ -2612,5 +2613,64 @@ public function test_default_variant_cannot_be_disabled_with_string_zero(): void
         'id' => $variant->id,
         'is_default' => true,
     ]);
+}
+
+public function test_create_product_variant_automatically_creates_stock_level(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Samsung Galaxy S26',
+        'slug' => 'samsung-galaxy-s26',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = app(\App\Actions\ProductVariant\CreateProductVariant::class)
+        ->execute([
+            'product_id' => $product->id,
+            'sku' => 'SGS26-128',
+            'price' => 450000,
+            'status' => 'ACTIVE',
+        ]);
+
+    $this->assertDatabaseHas('stock_levels', [
+        'store_id' => $store->id,
+        'product_variant_id' => $variant->id,
+        'physical_quantity' => 0,
+        'reserved_quantity' => 0,
+        'low_stock_threshold' => 5,
+    ]);
+
+    $this->assertNotNull($variant->stockLevel);
+
+    $this->assertSame(
+        $store->id,
+        $variant->stockLevel->store_id
+    );
+
+    $this->assertSame(
+        0,
+        $variant->stockLevel->availableQuantity()
+    );
 }
 }

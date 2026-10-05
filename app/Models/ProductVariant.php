@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -74,6 +76,9 @@ public function effectivePrice(?CarbonInterface $at = null): string
             'is_default' => 'boolean',
         ];
     }
-
+public function stockLevel(): HasOne
+{
+    return $this->hasOne(StockLevel::class);
+}
     
 }

@@ -2,6 +2,7 @@
 
 namespace App\Actions\ProductVariant;
 
+use App\Models\StockLevel;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 use App\Models\Product;
@@ -86,7 +87,16 @@ if (
             ]);
     }
 
-    return ProductVariant::create($data);
+   $variant = ProductVariant::create($data);
+
+StockLevel::create([
+    'product_variant_id' => $variant->id,
+    'physical_quantity' => 0,
+    'reserved_quantity' => 0,
+    'low_stock_threshold' => 5,
+]);
+
+return $variant;
 });
     }
 }
