@@ -387,6 +387,61 @@ public function test_create_product_also_creates_default_variant(): void
     );
 }
 
+public function test_create_product_rejects_negative_default_variant_price(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    try {
+        app(CreateProduct::class)->execute([
+            'category_id' => $category->id,
+            'name' => 'Produit Prix Invalide',
+            'slug' => 'produit-prix-invalide',
+            'status' => 'ACTIVE',
+            'is_featured' => false,
+
+            'default_variant' => [
+                'price' => -5000,
+                'sku' => 'INVALID-PRICE-001',
+            ],
+        ]);
+
+        $this->fail(
+            'CreateProduct aurait dû refuser un prix négatif pour la variante par défaut.'
+        );
+    } catch (\Illuminate\Validation\ValidationException $exception) {
+        $this->assertArrayHasKey(
+            'price',
+            $exception->errors()
+        );
+    }
+
+    $this->assertDatabaseMissing('products', [
+        'slug' => 'produit-prix-invalide',
+        'store_id' => $store->id,
+    ]);
+
+    $this->assertDatabaseMissing('product_variants', [
+        'sku' => 'INVALID-PRICE-001',
+        'store_id' => $store->id,
+    ]);
+}
+
 public function test_create_product_generates_sku_when_missing(): void
 {
     $store = Store::create([
