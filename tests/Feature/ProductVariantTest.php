@@ -1379,4 +1379,1065 @@ public function test_cannot_create_variant_with_promo_end_before_promo_start(): 
         'sku' => 'IPH17-DATE',
     ]);
 }
+public function test_store_owner_can_view_variant_from_own_store(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')->firstOrFail();
+    $user->roles()->attach($role);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-256',
+        'price' => 650000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    $response = $this
+        ->actingAs($user)
+        ->get(
+            route('product-variants.show', $variant)
+        );
+
+    $response
+        ->assertOk()
+        ->assertJson([
+            'id' => $variant->id,
+            'product_id' => $product->id,
+            'sku' => 'IPH17-256',
+            'price' => '650000.00',
+            'is_default' => true,
+            'status' => 'ACTIVE',
+        ]);
+}
+
+public function test_store_owner_cannot_view_variant_from_another_store(): void
+{
+    $this->seed();
+
+    $storeA = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $storeB = Store::create([
+        'name' => 'Boutique Beta',
+        'slug' => 'boutique-beta',
+        'status' => 'ACTIVE',
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')->firstOrFail();
+
+    $userA = User::factory()->create([
+        'store_id' => $storeA->id,
+    ]);
+
+    $userA->roles()->attach($role);
+
+    $userB = User::factory()->create([
+        'store_id' => $storeB->id,
+    ]);
+
+    $userB->roles()->attach($role);
+
+    // Création des données dans la boutique B.
+    app(TenantContext::class)->setFromUser($userB);
+
+    $categoryB = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $productB = Product::create([
+        'category_id' => $categoryB->id,
+        'name' => 'Galaxy S26',
+        'slug' => 'galaxy-s26',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variantB = ProductVariant::create([
+        'product_id' => $productB->id,
+        'sku' => 'GALAXY-S26-256',
+        'price' => 600000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    // Maintenant, utilisateur de la boutique A.
+    app(TenantContext::class)->setFromUser($userA);
+
+    $response = $this
+        ->actingAs($userA)
+        ->get(
+            route('product-variants.show', $variantB)
+        );
+
+    $response->assertNotFound();
+}
+
+public function test_user_without_products_view_permission_cannot_view_variant(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $owner = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($owner);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-256',
+        'price' => 650000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    // Même boutique, mais aucun rôle/permission.
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $response = $this
+        ->actingAs($user)
+        ->get(
+            route('product-variants.show', $variant)
+        );
+
+    $response->assertForbidden();
+}
+
+public function test_updating_variant_as_default_replaces_previous_default(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $firstVariant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-128',
+        'price' => 550000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    $secondVariant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-256',
+        'price' => 650000,
+        'is_default' => false,
+        'status' => 'ACTIVE',
+    ]);
+
+    app(\App\Actions\ProductVariant\UpdateProductVariant::class)
+        ->execute($secondVariant, [
+            'sku' => 'IPH17-256',
+            'price' => 650000,
+            'promo_price' => null,
+            'promo_starts_at' => null,
+            'promo_ends_at' => null,
+            'is_default' => true,
+            'status' => 'ACTIVE',
+        ]);
+
+    $this->assertFalse($firstVariant->fresh()->is_default);
+    $this->assertTrue($secondVariant->fresh()->is_default);
+
+    $this->assertSame(
+        1,
+        ProductVariant::query()
+            ->where('product_id', $product->id)
+            ->where('is_default', true)
+            ->count()
+    );
+}
+public function test_cannot_remove_default_status_without_replacement(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-128',
+        'price' => 550000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    try {
+        app(\App\Actions\ProductVariant\UpdateProductVariant::class)
+            ->execute($variant, [
+                'sku' => 'IPH17-128',
+                'price' => 550000,
+                'promo_price' => null,
+                'promo_starts_at' => null,
+                'promo_ends_at' => null,
+                'is_default' => false,
+                'status' => 'ACTIVE',
+            ]);
+
+        $this->fail(
+            'La variante par défaut aurait dû être protégée.'
+        );
+    } catch (\Illuminate\Validation\ValidationException $exception) {
+        $this->assertArrayHasKey(
+            'is_default',
+            $exception->errors()
+        );
+    }
+
+    $this->assertTrue(
+        $variant->fresh()->is_default
+    );
+}
+
+public function test_store_owner_can_update_variant_from_own_store(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')->firstOrFail();
+    $user->roles()->attach($role);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-256',
+        'price' => 650000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    $response = $this
+        ->actingAs($user)
+        ->put(
+            route('product-variants.update', $variant),
+            [
+                'sku' => 'IPH17-256',
+                'price' => 675000,
+                'promo_price' => 625000,
+                'promo_starts_at' => '2026-10-10 08:00:00',
+                'promo_ends_at' => '2026-10-20 23:59:59',
+                'status' => 'ACTIVE',
+            ]
+        );
+
+    $response->assertRedirect(
+        route('product-variants.show', $variant)
+    );
+
+    $this->assertDatabaseHas('product_variants', [
+        'id' => $variant->id,
+        'store_id' => $store->id,
+        'product_id' => $product->id,
+        'sku' => 'IPH17-256',
+        'price' => 675000,
+        'promo_price' => 625000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+}
+
+public function test_store_owner_cannot_update_variant_from_another_store(): void
+{
+    $this->seed();
+
+    $storeA = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $storeB = Store::create([
+        'name' => 'Boutique Beta',
+        'slug' => 'boutique-beta',
+        'status' => 'ACTIVE',
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')->firstOrFail();
+
+    $userA = User::factory()->create([
+        'store_id' => $storeA->id,
+    ]);
+
+    $userA->roles()->attach($role);
+
+    $userB = User::factory()->create([
+        'store_id' => $storeB->id,
+    ]);
+
+    $userB->roles()->attach($role);
+
+    // Création de la variante dans la boutique B.
+    app(TenantContext::class)->setFromUser($userB);
+
+    $categoryB = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $productB = Product::create([
+        'category_id' => $categoryB->id,
+        'name' => 'Galaxy S26',
+        'slug' => 'galaxy-s26',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variantB = ProductVariant::create([
+        'product_id' => $productB->id,
+        'sku' => 'GALAXY-S26-256',
+        'price' => 600000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    // Tentative depuis la boutique A.
+    app(TenantContext::class)->setFromUser($userA);
+
+    $response = $this
+        ->actingAs($userA)
+        ->put(
+            route('product-variants.update', $variantB),
+            [
+                'sku' => 'PIRATED-SKU',
+                'price' => 1000,
+                'status' => 'INACTIVE',
+            ]
+        );
+
+    $response->assertNotFound();
+
+    // La variante B doit rester intacte.
+    app(TenantContext::class)->setFromUser($userB);
+
+    $this->assertDatabaseHas('product_variants', [
+        'id' => $variantB->id,
+        'store_id' => $storeB->id,
+        'sku' => 'GALAXY-S26-256',
+        'price' => 600000,
+        'status' => 'ACTIVE',
+    ]);
+}
+
+public function test_user_without_products_update_permission_cannot_update_variant(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $owner = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($owner);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-256',
+        'price' => 650000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    // Même boutique, mais aucun rôle/permission.
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $response = $this
+        ->actingAs($user)
+        ->put(
+            route('product-variants.update', $variant),
+            [
+                'sku' => 'IPH17-HACKED',
+                'price' => 1000,
+                'status' => 'INACTIVE',
+            ]
+        );
+
+    $response->assertForbidden();
+
+    $this->assertDatabaseHas('product_variants', [
+        'id' => $variant->id,
+        'sku' => 'IPH17-256',
+        'price' => 650000,
+        'status' => 'ACTIVE',
+    ]);
+}
+
+public function test_store_owner_can_promote_another_variant_as_default_via_http(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')->firstOrFail();
+    $user->roles()->attach($role);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $firstVariant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-128',
+        'price' => 550000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    $secondVariant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-256',
+        'price' => 650000,
+        'is_default' => false,
+        'status' => 'ACTIVE',
+    ]);
+
+    $response = $this
+        ->actingAs($user)
+        ->put(
+            route('product-variants.update', $secondVariant),
+            [
+                'sku' => 'IPH17-256',
+                'price' => 650000,
+                'is_default' => true,
+                'status' => 'ACTIVE',
+            ]
+        );
+
+    $response->assertRedirect(
+        route('product-variants.show', $secondVariant)
+    );
+
+    $this->assertFalse(
+        $firstVariant->fresh()->is_default
+    );
+
+    $this->assertTrue(
+        $secondVariant->fresh()->is_default
+    );
+
+    $this->assertSame(
+        1,
+        ProductVariant::query()
+            ->where('product_id', $product->id)
+            ->where('is_default', true)
+            ->count()
+    );
+}
+
+public function test_cannot_remove_default_status_via_http_without_replacement(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')->firstOrFail();
+    $user->roles()->attach($role);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-128',
+        'price' => 550000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    $response = $this
+        ->actingAs($user)
+        ->put(
+            route('product-variants.update', $variant),
+            [
+                'sku' => 'IPH17-128',
+                'price' => 550000,
+                'is_default' => false,
+                'status' => 'ACTIVE',
+            ]
+        );
+
+    $response->assertSessionHasErrors('is_default');
+
+    $this->assertTrue(
+        $variant->fresh()->is_default
+    );
+}
+
+public function test_non_default_variant_can_be_deleted_when_another_variant_exists(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $defaultVariant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-128',
+        'price' => 550000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-256',
+        'price' => 650000,
+        'is_default' => false,
+        'status' => 'ACTIVE',
+    ]);
+
+    app(\App\Actions\ProductVariant\DeleteProductVariant::class)
+        ->execute($variant);
+
+    $this->assertDatabaseMissing('product_variants', [
+        'id' => $variant->id,
+    ]);
+
+    $this->assertDatabaseHas('product_variants', [
+        'id' => $defaultVariant->id,
+        'is_default' => true,
+    ]);
+}
+
+public function test_last_variant_of_product_cannot_be_deleted(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-128',
+        'price' => 550000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    try {
+        app(\App\Actions\ProductVariant\DeleteProductVariant::class)
+            ->execute($variant);
+
+        $this->fail(
+            'La dernière variante du produit aurait dû être protégée.'
+        );
+    } catch (\Illuminate\Validation\ValidationException $exception) {
+        $this->assertArrayHasKey(
+            'variant',
+            $exception->errors()
+        );
+    }
+
+    $this->assertDatabaseHas('product_variants', [
+        'id' => $variant->id,
+        'product_id' => $product->id,
+        'is_default' => true,
+    ]);
+}
+
+public function test_default_variant_cannot_be_deleted_when_other_variants_exist(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $defaultVariant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-128',
+        'price' => 550000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-256',
+        'price' => 650000,
+        'is_default' => false,
+        'status' => 'ACTIVE',
+    ]);
+
+    try {
+        app(\App\Actions\ProductVariant\DeleteProductVariant::class)
+            ->execute($defaultVariant);
+
+        $this->fail(
+            'La variante par défaut aurait dû être protégée.'
+        );
+    } catch (\Illuminate\Validation\ValidationException $exception) {
+        $this->assertArrayHasKey(
+            'variant',
+            $exception->errors()
+        );
+    }
+
+    $this->assertDatabaseHas('product_variants', [
+        'id' => $defaultVariant->id,
+        'is_default' => true,
+    ]);
+
+    $this->assertEquals(
+        2,
+        ProductVariant::where('product_id', $product->id)->count()
+    );
+}
+
+public function test_store_owner_can_delete_own_non_default_variant(): void
+{
+
+$this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')->firstOrFail();
+    $user->roles()->attach($role);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-128',
+        'price' => 550000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-256',
+        'price' => 650000,
+        'is_default' => false,
+        'status' => 'ACTIVE',
+    ]);
+
+    $response = $this
+        ->actingAs($user)
+        ->delete(route('product-variants.destroy', $variant));
+
+    $response->assertRedirect(
+        route('products.show', $product)
+    );
+
+    $this->assertDatabaseMissing('product_variants', [
+        'id' => $variant->id,
+    ]);
+
+    $this->assertDatabaseHas('product_variants', [
+        'product_id' => $product->id,
+        'sku' => 'IPH17-128',
+        'is_default' => true,
+    ]);
+}
+
+public function test_store_owner_cannot_delete_variant_from_another_store(): void
+{
+    $this->seed();
+
+    $storeA = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $storeB = Store::create([
+        'name' => 'Boutique Beta',
+        'slug' => 'boutique-beta',
+        'status' => 'ACTIVE',
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')->firstOrFail();
+
+    $userA = User::factory()->create([
+        'store_id' => $storeA->id,
+    ]);
+    $userA->roles()->attach($role);
+
+    $userB = User::factory()->create([
+        'store_id' => $storeB->id,
+    ]);
+    $userB->roles()->attach($role);
+
+    // Création des données dans la boutique B.
+    app(TenantContext::class)->setFromUser($userB);
+
+    $categoryB = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $productB = Product::create([
+        'category_id' => $categoryB->id,
+        'name' => 'Galaxy S26',
+        'slug' => 'galaxy-s26',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    ProductVariant::create([
+        'product_id' => $productB->id,
+        'sku' => 'GALAXY-S26-128',
+        'price' => 550000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    $variantB = ProductVariant::create([
+        'product_id' => $productB->id,
+        'sku' => 'GALAXY-S26-256',
+        'price' => 650000,
+        'is_default' => false,
+        'status' => 'ACTIVE',
+    ]);
+
+    // La boutique A tente de supprimer la variante de B.
+    app(TenantContext::class)->setFromUser($userA);
+
+    $response = $this
+        ->actingAs($userA)
+        ->delete(route('product-variants.destroy', $variantB));
+
+    $response->assertNotFound();
+
+    // Vérification depuis le tenant B.
+    app(TenantContext::class)->setFromUser($userB);
+
+    $this->assertDatabaseHas('product_variants', [
+        'id' => $variantB->id,
+        'store_id' => $storeB->id,
+        'sku' => 'GALAXY-S26-256',
+    ]);
+}
+
+public function test_user_without_products_update_permission_cannot_delete_variant(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-128',
+        'price' => 550000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    $variant = ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-256',
+        'price' => 650000,
+        'is_default' => false,
+        'status' => 'ACTIVE',
+    ]);
+
+    $response = $this
+        ->actingAs($user)
+        ->delete(route('product-variants.destroy', $variant));
+
+    $response->assertForbidden();
+
+    $this->assertDatabaseHas('product_variants', [
+        'id' => $variant->id,
+        'store_id' => $store->id,
+        'sku' => 'IPH17-256',
+    ]);
+}
 }

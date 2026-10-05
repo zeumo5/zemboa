@@ -38,4 +38,20 @@ Route::get('/products/{product}', [ProductController::class, 'show'])
     '/products/{product}/variants',
     [ProductVariantController::class, 'store']
 )->name('product-variants.store');
+
+Route::get(
+    '/product-variants/{productVariant}',
+    [ProductVariantController::class, 'show']
+)->name('product-variants.show');
+
+Route::put(
+    '/product-variants/{productVariant}',
+    [ProductVariantController::class, 'update']
+)->name('product-variants.update');
+
+Route::delete(
+    '/product-variants/{productVariant}',
+    [ProductVariantController::class, 'destroy']
+)->name('product-variants.destroy');
+
 });
