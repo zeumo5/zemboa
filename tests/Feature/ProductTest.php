@@ -2,6 +2,10 @@
 
 namespace Tests\Feature;
 
+
+use App\Actions\Stock\CreateStockReservation;
+use App\Actions\Stock\ReceiveStock;
+use App\Actions\Product\DeleteProduct;
 use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Database\QueryException;
@@ -579,4 +583,198 @@ public function test_user_with_products_create_permission_can_create_product(): 
         $user->can('create', Product::class)
     );
 }
+
+public function test_product_without_stock_history_can_be_deleted(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = app(CreateProduct::class)->execute([
+        'category_id' => $category->id,
+        'name' => 'Nike Air',
+        'slug' => 'nike-air',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+        'default_variant' => [
+            'sku' => 'NIKE-AIR-001',
+            'price' => '25000.00',
+        ],
+    ]);
+
+    $productId = $product->id;
+    $variantId = $product->variants()->firstOrFail()->id;
+
+    app(DeleteProduct::class)->execute($product);
+
+    $this->assertDatabaseMissing('products', [
+        'id' => $productId,
+    ]);
+
+    $this->assertDatabaseMissing('product_variants', [
+        'id' => $variantId,
+    ]);
+
+    $this->assertDatabaseMissing('stock_levels', [
+        'product_variant_id' => $variantId,
+    ]);
+}
+
+public function test_product_with_stock_movement_cannot_be_deleted(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = app(CreateProduct::class)->execute([
+        'category_id' => $category->id,
+        'name' => 'Nike Air',
+        'slug' => 'nike-air',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+        'default_variant' => [
+            'sku' => 'NIKE-AIR-001',
+            'price' => '25000.00',
+        ],
+    ]);
+
+    $variant = $product->variants()->firstOrFail();
+
+    app(ReceiveStock::class)->execute(
+        $variant->id,
+        10,
+        $user->id,
+        'Stock initial'
+    );
+
+    try {
+        app(DeleteProduct::class)->execute($product);
+
+        $this->fail(
+            'La suppression aurait dû être refusée.'
+        );
+    } catch (ValidationException $exception) {
+        $this->assertArrayHasKey(
+            'product',
+            $exception->errors()
+        );
+    }
+
+    $this->assertDatabaseHas('products', [
+        'id' => $product->id,
+    ]);
+
+    $this->assertDatabaseHas('product_variants', [
+        'id' => $variant->id,
+    ]);
+
+    $this->assertDatabaseHas('stock_movements', [
+        'product_variant_id' => $variant->id,
+        'type' => 'RECEIPT',
+        'quantity' => 10,
+    ]);
+}
+
+public function test_product_with_stock_reservation_cannot_be_deleted(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = app(CreateProduct::class)->execute([
+        'category_id' => $category->id,
+        'name' => 'Nike Air',
+        'slug' => 'nike-air',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+        'default_variant' => [
+            'sku' => 'NIKE-AIR-001',
+            'price' => '25000.00',
+        ],
+    ]);
+
+    $variant = $product->variants()->firstOrFail();
+
+    // Préparation du stock uniquement pour ce scénario de test.
+    // On évite ReceiveStock car il créerait un StockMovement.
+    $variant->stockLevel()->update([
+        'physical_quantity' => 10,
+    ]);
+
+    app(CreateStockReservation::class)->execute(
+        $variant->id,
+        2,
+        now()->addMinutes(30)
+    );
+
+    try {
+        app(DeleteProduct::class)->execute($product);
+
+        $this->fail(
+            'La suppression aurait dû être refusée.'
+        );
+    } catch (ValidationException $exception) {
+        $this->assertArrayHasKey(
+            'product',
+            $exception->errors()
+        );
+    }
+
+    $this->assertDatabaseHas('products', [
+        'id' => $product->id,
+    ]);
+
+    $this->assertDatabaseHas('product_variants', [
+        'id' => $variant->id,
+    ]);
+
+    $this->assertDatabaseHas('stock_reservations', [
+        'product_variant_id' => $variant->id,
+        'quantity' => 2,
+        'status' => 'ACTIVE',
+    ]);
+}
+
 }
