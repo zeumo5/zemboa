@@ -24,6 +24,16 @@ class ExpireStockReservation
                 ]);
             }
 
+            if (
+    $reservation->expires_at === null ||
+    $reservation->expires_at->isFuture()
+) {
+    throw ValidationException::withMessages([
+        'reservation' =>
+            'Cette réservation n’a pas encore atteint sa date d’expiration.',
+    ]);
+}
+
             if ($reservation->status !== 'ACTIVE') {
                 throw ValidationException::withMessages([
                     'reservation' =>

@@ -556,6 +556,9 @@ public function test_active_stock_reservation_can_be_expired(): void
         quantity: 3
     );
 
+    $reservation->expires_at = now()->subMinute();
+$reservation->save();
+
     $stockLevel = $variant->stockLevel()->firstOrFail();
 
     app(ExpireStockReservation::class)->execute(
@@ -674,6 +677,149 @@ public function test_converted_stock_reservation_cannot_be_converted_again(): vo
             ->where('type', 'SALE')
             ->count()
     );
+}
+
+public function test_stock_movement_creator_must_belong_to_current_store(): void
+{
+    $movement = $this->createStockMovement();
+
+    $variant = $movement->productVariant;
+
+    $otherStore = Store::create([
+        'name' => 'Boutique Beta',
+        'slug' => 'boutique-beta',
+        'status' => 'ACTIVE',
+    ]);
+
+    $otherUser = User::factory()->create([
+        'store_id' => $otherStore->id,
+    ]);
+
+    try {
+        app(CreateStockMovement::class)->execute([
+            'product_variant_id' => $variant->id,
+            'type' => 'RECEIPT',
+            'quantity' => 5,
+            'reason' => 'Test cross-tenant',
+            'created_by' => $otherUser->id,
+        ]);
+
+        $this->fail(
+            'Un utilisateur d’une autre boutique ne devrait pas pouvoir être enregistré comme créateur du mouvement.'
+        );
+    } catch (\Illuminate\Validation\ValidationException $exception) {
+        $this->assertArrayHasKey(
+            'created_by',
+            $exception->errors()
+        );
+    }
+
+    $this->assertDatabaseMissing('stock_movements', [
+        'product_variant_id' => $variant->id,
+        'type' => 'RECEIPT',
+        'quantity' => 5,
+        'created_by' => $otherUser->id,
+    ]);
+}
+
+public function test_stock_movement_quantity_must_be_a_whole_integer(): void
+{
+    $movement = $this->createStockMovement();
+
+    $variant = $movement->productVariant;
+
+    try {
+        app(CreateStockMovement::class)->execute([
+            'product_variant_id' => $variant->id,
+            'type' => 'RECEIPT',
+            'quantity' => 1.5,
+            'reason' => 'Fractional quantity test',
+        ]);
+
+        $this->fail(
+            'Une quantité fractionnaire ne devrait pas être acceptée.'
+        );
+    } catch (\Illuminate\Validation\ValidationException $exception) {
+        $this->assertArrayHasKey(
+            'quantity',
+            $exception->errors()
+        );
+    }
+
+    $this->assertDatabaseMissing('stock_movements', [
+        'product_variant_id' => $variant->id,
+        'type' => 'RECEIPT',
+        'quantity' => 1,
+        'reason' => 'Fractional quantity test',
+    ]);
+}
+
+public function test_active_reservation_cannot_expire_before_expiration_time(): void
+{
+    $movement = $this->createStockMovement();
+
+    $variant = $movement->productVariant;
+    $stockLevel = $variant->stockLevel;
+
+    $stockLevel->physical_quantity = 10;
+    $stockLevel->save();
+
+    $reservation = app(CreateStockReservation::class)->execute(
+        $variant->id,
+        3
+    );
+
+    $reservation->expires_at = now()->addHour();
+    $reservation->save();
+
+    try {
+        app(ExpireStockReservation::class)->execute($reservation->id);
+
+        $this->fail(
+            'Une réservation ne devrait pas expirer avant son heure d’expiration.'
+        );
+    } catch (\Illuminate\Validation\ValidationException $exception) {
+        $this->assertArrayHasKey(
+            'reservation',
+            $exception->errors()
+        );
+    }
+
+    $reservation->refresh();
+    $stockLevel->refresh();
+
+    $this->assertSame('ACTIVE', $reservation->status);
+    $this->assertNull($reservation->released_at);
+    $this->assertSame(3, $stockLevel->reserved_quantity);
+}
+
+public function test_stock_reservation_can_be_created_with_expiration_time(): void
+{
+    $movement = $this->createStockMovement();
+
+    $variant = $movement->productVariant;
+    $stockLevel = $variant->stockLevel;
+
+    $stockLevel->physical_quantity = 10;
+    $stockLevel->save();
+
+   $expiresAt = now()
+    ->addMinutes(30)
+    ->startOfSecond();
+
+    $reservation = app(CreateStockReservation::class)->execute(
+        $variant->id,
+        3,
+        $expiresAt
+    );
+
+    $this->assertNotNull($reservation->expires_at);
+
+    $this->assertTrue(
+        $reservation->expires_at->equalTo($expiresAt)
+    );
+
+    $this->assertSame('ACTIVE', $reservation->status);
 }
 
 }

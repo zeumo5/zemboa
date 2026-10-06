@@ -2,6 +2,8 @@
 
 namespace App\Actions\Stock;
 
+
+use Carbon\CarbonInterface;
 use App\Models\StockLevel;
 use App\Models\StockReservation;
 use Illuminate\Support\Facades\DB;
@@ -9,21 +11,24 @@ use Illuminate\Validation\ValidationException;
 
 class CreateStockReservation
 {
-    public function execute(
-        int $productVariantId,
-        int $quantity
-    ): StockReservation {
-        if ($quantity <= 0) {
-            throw ValidationException::withMessages([
-                'quantity' =>
-                    'La quantité à réserver doit être supérieure à zéro.',
-            ]);
-        }
+   public function execute(
+    int $productVariantId,
+    int $quantity,
+    ?CarbonInterface $expiresAt = null
+): StockReservation {
 
-        return DB::transaction(function () use (
-            $productVariantId,
-            $quantity
-        ) {
+if ($quantity <= 0) {
+    throw ValidationException::withMessages([
+        'quantity' =>
+            'La quantité à réserver doit être supérieure à zéro.',
+    ]);
+}
+
+       return DB::transaction(function () use (
+    $productVariantId,
+    $quantity,
+    $expiresAt
+) {
             $stockLevel = StockLevel::query()
                 ->where('product_variant_id', $productVariantId)
                 ->lockForUpdate()
@@ -47,10 +52,11 @@ class CreateStockReservation
             $stockLevel->save();
 
             return StockReservation::create([
-                'product_variant_id' => $productVariantId,
-                'quantity' => $quantity,
-                'status' => 'ACTIVE',
-            ]);
+    'product_variant_id' => $productVariantId,
+    'quantity' => $quantity,
+    'status' => 'ACTIVE',
+    'expires_at' => $expiresAt,
+]);
         });
     }
 }

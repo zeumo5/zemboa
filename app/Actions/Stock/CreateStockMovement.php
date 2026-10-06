@@ -2,6 +2,10 @@
 
 namespace App\Actions\Stock;
 
+
+
+use App\Models\User;
+use App\Support\TenantContext;
 use App\Models\ProductVariant;
 use App\Models\StockMovement;
 use Illuminate\Validation\ValidationException;
@@ -28,16 +32,17 @@ class CreateStockMovement
             ]);
         }
 
-        if (
-            !isset($data['quantity'])
-            || !is_numeric($data['quantity'])
-            || (int) $data['quantity'] <= 0
-        ) {
-            throw ValidationException::withMessages([
-                'quantity' =>
-                    'La quantité du mouvement doit être supérieure à zéro.',
-            ]);
-        }
+       if (
+    ! isset($data['quantity']) ||
+    filter_var($data['quantity'], FILTER_VALIDATE_INT) === false ||
+    (int) $data['quantity'] <= 0
+) {
+    throw ValidationException::withMessages([
+        'quantity' => 'La quantité doit être un nombre entier supérieur à zéro.',
+    ]);
+}
+
+$data['quantity'] = (int) $data['quantity'];
 
         if (
             !isset($data['type'])
@@ -47,6 +52,22 @@ class CreateStockMovement
                 'type' => 'Le type de mouvement de stock est invalide.',
             ]);
         }
+
+        if (isset($data['created_by'])) {
+    $currentStoreId = app(TenantContext::class)->storeId();
+
+    $creatorBelongsToCurrentStore = User::query()
+        ->whereKey($data['created_by'])
+        ->where('store_id', $currentStoreId)
+        ->exists();
+
+    if (!$creatorBelongsToCurrentStore) {
+        throw ValidationException::withMessages([
+            'created_by' =>
+                'L’utilisateur associé au mouvement n’appartient pas à cette boutique.',
+        ]);
+    }
+}
 
         return StockMovement::create($data);
     }
