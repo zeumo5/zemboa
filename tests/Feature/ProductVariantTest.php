@@ -2108,6 +2108,165 @@ public function test_non_default_variant_can_be_deleted_when_another_variant_exi
     ]);
 }
 
+public function test_variant_with_stock_reservation_cannot_be_deleted(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-128',
+        'price' => 550000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    $variant = app(
+        \App\Actions\ProductVariant\CreateProductVariant::class
+    )->execute([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-256',
+        'price' => 650000,
+        'is_default' => false,
+        'status' => 'ACTIVE',
+    ]);
+
+   $stockLevel = $variant->stockLevel()->firstOrFail();
+
+$stockLevel->physical_quantity = 10;
+$stockLevel->save();
+
+    app(\App\Actions\Stock\CreateStockReservation::class)->execute(
+        productVariantId: $variant->id,
+        quantity: 3
+    );
+
+    try {
+        app(\App\Actions\ProductVariant\DeleteProductVariant::class)
+            ->execute($variant);
+
+        $this->fail(
+            'Une variante avec une réservation de stock ne devrait pas pouvoir être supprimée.'
+        );
+    } catch (\Illuminate\Validation\ValidationException $exception) {
+        $this->assertArrayHasKey(
+            'variant',
+            $exception->errors()
+        );
+    }
+
+    $this->assertDatabaseHas('product_variants', [
+        'id' => $variant->id,
+    ]);
+
+    $this->assertDatabaseHas('stock_reservations', [
+        'product_variant_id' => $variant->id,
+        'quantity' => 3,
+        'status' => 'ACTIVE',
+    ]);
+}
+
+public function test_variant_with_stock_movement_cannot_be_deleted(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    ProductVariant::create([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-128',
+        'price' => 550000,
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    $variant = app(
+        \App\Actions\ProductVariant\CreateProductVariant::class
+    )->execute([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-256',
+        'price' => 650000,
+        'is_default' => false,
+        'status' => 'ACTIVE',
+    ]);
+
+    app(\App\Actions\Stock\ReceiveStock::class)->execute(
+        productVariantId: $variant->id,
+        quantity: 10,
+        userId: $user->id,
+        reason: 'Stock initial'
+    );
+
+    try {
+        app(\App\Actions\ProductVariant\DeleteProductVariant::class)
+            ->execute($variant);
+
+        $this->fail(
+            'Une variante avec un historique de stock ne devrait pas pouvoir être supprimée.'
+        );
+    } catch (\Illuminate\Validation\ValidationException $exception) {
+        $this->assertArrayHasKey(
+            'variant',
+            $exception->errors()
+        );
+    }
+
+    $this->assertDatabaseHas('product_variants', [
+        'id' => $variant->id,
+    ]);
+
+    $this->assertDatabaseHas('stock_movements', [
+        'product_variant_id' => $variant->id,
+        'type' => 'RECEIPT',
+        'quantity' => 10,
+    ]);
+}
+
 public function test_last_variant_of_product_cannot_be_deleted(): void
 {
     $store = Store::create([
