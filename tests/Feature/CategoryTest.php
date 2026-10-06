@@ -2,6 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\Product;
+use Illuminate\Validation\ValidationException;
+use App\Models\User;
+use App\Models\Category;
+use App\Support\TenantContext;
+use App\Models\Store;
+use App\Actions\Category\DeleteCategory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -174,4 +181,83 @@ public function test_same_store_cannot_have_duplicate_category_slug(): void
         'status' => 'ACTIVE',
     ]);
 }
+
+public function test_empty_category_can_be_deleted(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    app(DeleteCategory::class)->execute($category);
+
+    $this->assertDatabaseMissing('categories', [
+        'id' => $category->id,
+    ]);
+}
+
+public function test_category_with_product_cannot_be_deleted(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Chaussures',
+        'slug' => 'chaussures',
+        'status' => 'ACTIVE',
+    ]);
+
+    Product::create([
+        'category_id' => $category->id,
+        'name' => 'Nike Air',
+        'slug' => 'nike-air',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    try {
+        app(DeleteCategory::class)->execute($category);
+
+        $this->fail(
+            'La suppression aurait dû être refusée.'
+        );
+    } catch (ValidationException $exception) {
+        $this->assertArrayHasKey(
+            'category',
+            $exception->errors()
+        );
+    }
+
+    $this->assertDatabaseHas('categories', [
+        'id' => $category->id,
+    ]);
+
+    $this->assertDatabaseHas('products', [
+        'category_id' => $category->id,
+        'slug' => 'nike-air',
+    ]);
+}
+
 }
