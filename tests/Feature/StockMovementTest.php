@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 
+
+use App\Models\Role;
+use App\Policies\StockLevelPolicy;
 use App\Actions\Stock\ConvertStockReservation;
 use App\Actions\Stock\ExpireStockReservation;
 use App\Actions\Stock\ReleaseStockReservation;
@@ -857,5 +860,343 @@ public function test_stock_reservation_cannot_be_deleted(): void
         'quantity' => 3,
     ]);
 }
+
+public function test_store_owner_can_manage_stock_level_in_own_store(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')
+        ->firstOrFail();
+
+    $user->roles()->attach($role);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Samsung Galaxy S26',
+        'slug' => 'samsung-galaxy-s26',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = app(CreateProductVariant::class)->execute([
+        'product_id' => $product->id,
+        'sku' => 'SGS26-128',
+        'price' => '450000.00',
+        'status' => 'ACTIVE',
+    ]);
+
+    $stockLevel = $variant->stockLevel()
+        ->firstOrFail();
+
+    $allowed = app(StockLevelPolicy::class)
+        ->manage($user, $stockLevel);
+
+    $this->assertTrue($allowed);
+}
+
+public function test_store_owner_cannot_manage_stock_level_from_another_store(): void
+{
+    $this->seed();
+
+    $storeA = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $storeB = Store::create([
+        'name' => 'Boutique Beta',
+        'slug' => 'boutique-beta',
+        'status' => 'ACTIVE',
+    ]);
+
+    $userA = User::factory()->create([
+        'store_id' => $storeA->id,
+    ]);
+
+    $userB = User::factory()->create([
+        'store_id' => $storeB->id,
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')
+        ->firstOrFail();
+
+    $userA->roles()->attach($role);
+    $userB->roles()->attach($role);
+
+    // Création des données de la boutique B.
+    app(TenantContext::class)->setFromUser($userB);
+
+    $categoryB = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $productB = Product::create([
+        'category_id' => $categoryB->id,
+        'name' => 'Samsung Galaxy S26',
+        'slug' => 'samsung-galaxy-s26',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variantB = app(CreateProductVariant::class)->execute([
+        'product_id' => $productB->id,
+        'sku' => 'B-SGS26-128',
+        'price' => '450000.00',
+        'status' => 'ACTIVE',
+    ]);
+
+    $stockLevelB = $variantB->stockLevel()
+        ->firstOrFail();
+
+    // On revient ensuite dans le contexte de la boutique A.
+    app(TenantContext::class)->setFromUser($userA);
+
+    $allowed = app(StockLevelPolicy::class)
+        ->manage($userA, $stockLevelB);
+
+    $this->assertFalse($allowed);
+}
+
+public function test_user_without_inventory_manage_cannot_manage_stock_level(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $owner = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $ownerRole = Role::where('code', 'STORE_OWNER')
+        ->firstOrFail();
+
+    $owner->roles()->attach($ownerRole);
+
+    app(TenantContext::class)->setFromUser($owner);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Samsung Galaxy S26',
+        'slug' => 'samsung-galaxy-s26',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = app(CreateProductVariant::class)->execute([
+        'product_id' => $product->id,
+        'sku' => 'SGS26-128',
+        'price' => '450000.00',
+        'status' => 'ACTIVE',
+    ]);
+
+    $stockLevel = $variant->stockLevel()
+        ->firstOrFail();
+
+    // Même boutique, mais aucune permission inventory.manage.
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $allowed = app(StockLevelPolicy::class)
+        ->manage($user, $stockLevel);
+
+    $this->assertFalse($allowed);
+}
+
+public function test_store_owner_can_view_stock_level_in_own_store(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')
+        ->firstOrFail();
+
+    $user->roles()->attach($role);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Samsung Galaxy S26',
+        'slug' => 'samsung-galaxy-s26',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = app(CreateProductVariant::class)->execute([
+        'product_id' => $product->id,
+        'sku' => 'SGS26-VIEW-128',
+        'price' => '450000.00',
+        'status' => 'ACTIVE',
+    ]);
+
+    $stockLevel = $variant->stockLevel()
+        ->firstOrFail();
+
+    $allowed = app(StockLevelPolicy::class)
+        ->view($user, $stockLevel);
+
+    $this->assertTrue($allowed);
+}
+
+public function test_store_owner_cannot_view_stock_level_from_another_store(): void
+{
+    $this->seed();
+
+    $storeA = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $storeB = Store::create([
+        'name' => 'Boutique Beta',
+        'slug' => 'boutique-beta',
+        'status' => 'ACTIVE',
+    ]);
+
+    $userA = User::factory()->create([
+        'store_id' => $storeA->id,
+    ]);
+
+    $userB = User::factory()->create([
+        'store_id' => $storeB->id,
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')
+        ->firstOrFail();
+
+    $userA->roles()->attach($role);
+    $userB->roles()->attach($role);
+
+    // Création des données de la boutique B.
+    app(TenantContext::class)->setFromUser($userB);
+
+    $categoryB = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $productB = Product::create([
+        'category_id' => $categoryB->id,
+        'name' => 'Samsung Galaxy S26',
+        'slug' => 'samsung-galaxy-s26',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variantB = app(CreateProductVariant::class)->execute([
+        'product_id' => $productB->id,
+        'sku' => 'B-SGS26-128',
+        'price' => '450000.00',
+        'status' => 'ACTIVE',
+    ]);
+
+    $stockLevelB = $variantB->stockLevel()
+        ->firstOrFail();
+
+    // On revient ensuite dans le contexte de la boutique A.
+    app(TenantContext::class)->setFromUser($userA);
+
+    $allowed = app(StockLevelPolicy::class)
+    ->view($userA, $stockLevelB);
+
+    $this->assertFalse($allowed);
+}
+
+public function test_store_owner_can_view_stock_list(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $role = Role::where('code', 'STORE_OWNER')
+        ->firstOrFail();
+
+    $user->roles()->attach($role);
+
+    $allowed = app(StockLevelPolicy::class)
+        ->viewAny($user);
+
+    $this->assertTrue($allowed);
+}
+
+public function test_user_without_inventory_view_cannot_view_stock_list(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $allowed = app(StockLevelPolicy::class)
+        ->viewAny($user);
+
+    $this->assertFalse($allowed);
+}
+
 
 }
