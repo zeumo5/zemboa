@@ -2832,4 +2832,68 @@ public function test_create_product_variant_automatically_creates_stock_level():
         $variant->stockLevel->availableQuantity()
     );
 }
+
+public function test_product_variant_has_stock_history_relations(): void
+{
+    $this->seed();
+
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+        'is_featured' => false,
+    ]);
+
+    $variant = app(\App\Actions\ProductVariant\CreateProductVariant::class)
+        ->execute([
+            'product_id' => $product->id,
+            'sku' => 'IPH17-STOCK',
+            'price' => 550000,
+            'status' => 'ACTIVE',
+        ]);
+
+    app(\App\Actions\Stock\ReceiveStock::class)->execute(
+        $variant->id,
+        10
+    );
+
+    $reservation = app(\App\Actions\Stock\CreateStockReservation::class)
+        ->execute(
+            $variant->id,
+            3,
+            now()->addMinutes(30)->startOfSecond()
+        );
+
+    $this->assertCount(1, $variant->stockMovements);
+    $this->assertSame(
+        'RECEIPT',
+        $variant->stockMovements->first()->type
+    );
+
+    $this->assertCount(1, $variant->stockReservations);
+    $this->assertSame(
+        $reservation->id,
+        $variant->stockReservations->first()->id
+    );
+}
+
 }

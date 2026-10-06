@@ -822,4 +822,40 @@ public function test_stock_reservation_can_be_created_with_expiration_time(): vo
     $this->assertSame('ACTIVE', $reservation->status);
 }
 
+public function test_stock_reservation_cannot_be_deleted(): void
+{
+    $movement = $this->createStockMovement();
+
+    $variant = $movement->productVariant;
+    $stockLevel = $variant->stockLevel;
+
+    $stockLevel->physical_quantity = 10;
+    $stockLevel->save();
+
+    $reservation = app(CreateStockReservation::class)->execute(
+        $variant->id,
+        3,
+        now()->addMinutes(30)->startOfSecond()
+    );
+
+    try {
+        $reservation->delete();
+
+        $this->fail(
+            'Une réservation de stock existante ne devrait pas pouvoir être supprimée.'
+        );
+    } catch (\LogicException $exception) {
+        $this->assertSame(
+            'Une réservation de stock existante ne peut pas être supprimée.',
+            $exception->getMessage()
+        );
+    }
+
+    $this->assertDatabaseHas('stock_reservations', [
+        'id' => $reservation->id,
+        'status' => 'ACTIVE',
+        'quantity' => 3,
+    ]);
+}
+
 }

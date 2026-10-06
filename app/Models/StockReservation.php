@@ -26,6 +26,15 @@ class StockReservation extends Model
         return $this->belongsTo(ProductVariant::class);
     }
 
+    protected static function booted(): void
+{
+    static::deleting(function () {
+        throw new \LogicException(
+            'Une réservation de stock existante ne peut pas être supprimée.'
+        );
+    });
+}
+
     protected function casts(): array
     {
         return [

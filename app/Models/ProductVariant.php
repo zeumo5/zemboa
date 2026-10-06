@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
@@ -79,6 +79,16 @@ public function effectivePrice(?CarbonInterface $at = null): string
 public function stockLevel(): HasOne
 {
     return $this->hasOne(StockLevel::class);
+}
+
+public function stockMovements(): HasMany
+{
+    return $this->hasMany(StockMovement::class);
+}
+
+public function stockReservations(): HasMany
+{
+    return $this->hasMany(StockReservation::class);
 }
     
 }
