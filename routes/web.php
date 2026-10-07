@@ -1,5 +1,7 @@
 <?php
 
+
+use App\Http\Controllers\StockController;
 use App\Http\Controllers\ProductVariantController;
 use App\Http\Controllers\ProductController;
 use Illuminate\Support\Facades\Route;
@@ -53,5 +55,20 @@ Route::delete(
     '/product-variants/{productVariant}',
     [ProductVariantController::class, 'destroy']
 )->name('product-variants.destroy');
+
+Route::get('/stock', [StockController::class, 'index'])
+    ->name('stock.index');
+
+Route::get('/stock/{stockLevel}', [StockController::class, 'show'])
+    ->name('stock.show');
+
+Route::post('/stock/{stockLevel}/receive', [StockController::class, 'receive'])
+    ->name('stock.receive');
+
+Route::post('/stock/{stockLevel}/adjust-in', [StockController::class, 'adjustIn'])
+    ->name('stock.adjust-in');
+
+Route::post('/stock/{stockLevel}/adjust-out', [StockController::class, 'adjustOut'])
+    ->name('stock.adjust-out');
 
 });

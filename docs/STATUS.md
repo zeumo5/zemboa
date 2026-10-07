@@ -522,21 +522,44 @@ Commit :
 Statut :
 
 ```text
-NOT IMPLEMENTED
-NEXT DEVELOPMENT TASK
-```
+IMPLEMENTED — backend HTTP boundary
 
-Lors du dernier audit :
+Composants actuellement présents :
+StockController
+StockAdjustmentRequest
+StockHttpTest
+
+Routes actuellement exposées :
+GET  /stock
+GET  /stock/{stockLevel}
+
+POST /stock/{stockLevel}/receive
+POST /stock/{stockLevel}/adjust-in
+POST /stock/{stockLevel}/adjust-out
+
+Autorisations :
+GET  -> inventory.view
+POST -> inventory.manage
+
+Les opérations HTTP réutilisent les Actions métier Stock existantes.
+Aucune route générique PUT/PATCH ne permet de modifier directement les quantités de StockLevel.
+L'isolation multi-tenant reste appliquée aux ressources Stock.
+Les opérations manuelles actuellement exposées sont :
+ReceiveStock
+AdjustStockIn
+AdjustStockOut
+
+Les réservations, conversions, expirations et retours restent destinés aux futurs workflows Checkout, Orders, Scheduler, Shipping et Returns.
+L'interface Stock finale n'est pas encore implémentée. Les réponses de lecture actuelles sont orientées backend/développement.
+Tests HTTP Stock validés :
+9 tests
+
+Suite complète validée :
 
 ```text
-StockController       absent
-Stock Form Requests   absent
-Stock HTTP routes     absent
-Stock UI              absent
+180 passed
+452 assertions
 ```
-
-Il ne faut pas recommencer la logique métier Stock déjà développée.
-
 ---
 
 # Modules futurs
@@ -548,7 +571,6 @@ Statut :
 ```text
 PLANNED
 ```
-
 ---
 
 ## 22. Cart
@@ -1002,97 +1024,12 @@ StockLevelPolicy
 
 Ils existent déjà.
 
-La prochaine tâche est :
 
-```text
-STOCK HTTP BOUNDARY
-```
+La frontière HTTP du Stock est maintenant implémentée et validée.
 
----
+Le prochain développement n'est pas encore engagé.
 
-## 49. Architecture prévue pour Stock HTTP
-
-Lecture :
-
-```text
-GET stock
-GET stock/{stockLevel}
-```
-
-Permission :
-
-```text
-inventory.view
-```
-
-Mutations initiales :
-
-```text
-POST stock/{stockLevel}/receive
-POST stock/{stockLevel}/adjust-in
-POST stock/{stockLevel}/adjust-out
-```
-
-Permission :
-
-```text
-inventory.manage
-```
-
-Ne pas créer :
-
-```text
-PUT/PATCH StockLevel quantities
-```
-
-Les quantités doivent rester pilotées par les Actions métier.
-
----
-
-## 50. Ne pas exposer immédiatement
-
-Ne pas exposer comme opérations manuelles génériques :
-
-```text
-CreateStockReservation
-ReleaseStockReservation
-ExpireStockReservation
-ConvertStockReservation
-ReturnStock
-```
-
-Elles appartiendront principalement aux futurs workflows :
-
-```text
-Checkout
-Orders
-Scheduler
-Shipping
-Returns
-```
-
----
-
-## 51. Ordre de reprise
-
-Après vérification finale de la documentation :
-
-```text
-1. Inspect existing Controllers
-2. Inspect existing Form Requests
-3. Re-read routes/web.php
-4. Validate Stock HTTP route design
-5. Design Stock Form Requests
-6. Design thin Stock Controller
-7. Write HTTP tests
-8. Implement one Stock endpoint at a time
-9. Run focused tests
-10. Run complete test suite
-11. Review tenant/security behavior
-12. Commit
-13. Push
-14. Update documentation if status changed
-```
+Avant de commencer le module suivant, son architecture et son périmètre doivent être validés conformément à `PROJECT_RULES.md`.
 
 ---
 
