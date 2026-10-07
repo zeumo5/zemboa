@@ -1,58 +1,257 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# ZEMBOA
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+ZEMBOA est une plateforme SaaS e-commerce multi-boutiques développée avec Laravel.
 
-## About Laravel
+L'objectif est de permettre à plusieurs commerçants de gérer leurs boutiques, catalogues, stocks, commandes, livraisons et paiements depuis une même application tout en garantissant l'isolation des données de chaque boutique.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+> Statut actuel : développement du MVP.
+>
+> Branche de travail au moment de cette documentation : `feat/stock`
+>
+> Dernier commit poussé de référence : `2dab68d` — `feat: add stock authorization policy`
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Stack technique
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- PHP 8.3
+- Laravel 13
+- MySQL
+- Blade
+- Tailwind CSS 4 avec intégration Vite
+- Vite
+- PHPUnit / Laravel testing tools
+- Git / GitHub
 
-## Learning Laravel
+Environnement de développement actuel : Laragon sous Windows.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+---
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Architecture
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+ZEMBOA utilise une architecture SaaS multi-boutiques avec :
 
-## Agentic Development
+- une application Laravel ;
+- une base de données partagée ;
+- des tables métier partagées ;
+- `store_id` pour identifier les données appartenant à une boutique.
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+Le flux applicatif privilégié est :
+
+`HTTP -> Form Request -> Controller -> Action -> Model/Database`
+
+La logique métier importante doit rester dans les Actions/services plutôt que dans les contrôleurs.
+
+---
+
+## Multi-tenancy
+
+L'isolation des boutiques repose actuellement sur plusieurs couches :
+
+- `TenantContext`
+- middleware `SetTenantContext`
+- trait `BelongsToStore`
+- global scope Eloquent
+- Policies
+- permissions
+- contraintes/indexes de base de données
+- tests cross-tenant
+
+Le système est conçu pour échouer de manière fermée lorsqu'aucun tenant valide n'est disponible.
+
+Les contraintes SQL actuelles ne garantissent cependant pas à elles seules toute l'intégrité inter-tenant. Les protections applicatives restent indispensables.
+
+---
+
+## Modules actuellement implémentés
+
+### Boutiques et utilisateurs
+
+La base contient les boutiques et les utilisateurs internes associés aux boutiques.
+
+### Rôles et permissions
+
+Rôles V1 :
+
+- `SUPER_ADMIN`
+- `STORE_OWNER`
+- `DELIVERY_AGENT`
+
+Le RBAC utilise les tables :
+
+- `roles`
+- `permissions`
+- `role_user`
+- `permission_role`
+
+### Catalogue
+
+Le domaine Catalogue comprend actuellement :
+
+- catégories ;
+- produits ;
+- variantes ;
+- attributs ;
+- valeurs d'attributs ;
+- association variante/valeur ;
+- métadonnées d'images produit.
+
+Les opérations HTTP principales existent pour :
+
+- Category
+- Product
+- ProductVariant
+
+### Stock
+
+Le domaine Stock est implémenté au niveau métier.
+
+Il comprend :
+
+- `StockLevel`
+- `StockMovement`
+- `StockReservation`
+
+Actions présentes :
+
+- réception de stock ;
+- ajustement entrant ;
+- ajustement sortant ;
+- retour en stock ;
+- création de réservation ;
+- libération de réservation ;
+- expiration de réservation ;
+- conversion de réservation en vente.
+
+`StockLevelPolicy` contrôle la consultation et la gestion du stock avec les permissions :
+
+- `inventory.view`
+- `inventory.manage`
+
+---
+
+## Règles essentielles du stock
+
+Le stock est géré par `ProductVariant`.
+
+Dans la V1 :
+
+`1 boutique = 1 stock logique`
+
+Les quantités principales sont :
+
+- `physical_quantity`
+- `reserved_quantity`
+
+La quantité disponible est calculée :
+
+`available = physical - reserved`
+
+Le panier ne réserve pas le stock.
+
+La réservation intervient au checkout.
+
+Une vente provenant du stock réservé doit convertir la réservation et produire un mouvement historique `SALE`.
+
+Les modifications physiques du stock passent par les Actions métier et ne doivent pas être réalisées par un CRUD direct sur `StockLevel`.
+
+---
+
+## Routes HTTP actuelles
+
+Les routes métier existantes sont protégées par :
+
+`auth + tenant`
+
+Elles couvrent actuellement :
+
+- Categories
+- Products
+- ProductVariants
+
+La couche HTTP du Stock n'est pas encore implémentée.
+
+---
+
+## Tests
+
+Le projet possède des tests Feature couvrant notamment :
+
+- multi-tenancy ;
+- catégories ;
+- produits ;
+- variantes ;
+- attributs ;
+- images produit ;
+- rôles et permissions ;
+- stock ;
+- Policies ;
+- isolation cross-tenant.
+
+Dernière suite complète connue avant la création de cette documentation :
+
+`171 tests passed — 418 assertions`
+
+Cette valeur est un snapshot historique et doit être mise à jour lorsqu'une nouvelle suite complète est exécutée.
+
+---
+
+## Fonctionnalités non encore terminées
+
+Les éléments suivants ne doivent pas être considérés comme implémentés complètement :
+
+- interface HTTP Stock ;
+- interface utilisateur complète ;
+- Orders ;
+- Checkout ;
+- Customers ;
+- Shipping ;
+- Payments ;
+- Notifications ;
+- Analytics ;
+- API `/api/v1` ;
+- système multi-thème ;
+- configuration avancée des boutiques ;
+- véritable upload/stockage des images produit ;
+- expiration automatique planifiée des réservations ;
+- déploiement production.
+
+---
+
+## Prochaine étape
+
+La prochaine étape de développement est la frontière HTTP du Stock.
+
+Architecture prévue à valider avant implémentation :
+
+- consultation du stock avec `inventory.view` ;
+- réception de stock avec `inventory.manage` ;
+- ajustement entrant avec `inventory.manage` ;
+- ajustement sortant avec `inventory.manage` ;
+- contrôleurs minces ;
+- Form Requests ;
+- Actions métier existantes réutilisées ;
+- aucune route CRUD permettant de modifier directement les quantités de `StockLevel`.
+
+---
+
+## Documentation
+
+La documentation permanente du projet est répartie entre :
+
+- `README.md` — vue d'ensemble et démarrage ;
+- `PROJECT_RULES.md` — règles permanentes à respecter ;
+- `DECISIONS.md` — décisions architecturales ;
+- `CHANGELOG.md` — évolution importante du projet ;
+- `docs/` — documentation technique détaillée.
+
+Avant une modification importante, lire `PROJECT_RULES.md`.
+
+---
+
+## Installation locale
+
+Cloner le projet puis installer les dépendances :
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
-```
-
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
-
-## Contributing
-
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+composer install
+npm install
