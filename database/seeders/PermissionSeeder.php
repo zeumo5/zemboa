@@ -37,8 +37,11 @@ class PermissionSeeder extends Seeder
             ['name' => 'Voir les commandes', 'code' => 'orders.view'],
             ['name' => 'Modifier les commandes', 'code' => 'orders.update'],
 
+
             // Clients
             ['name' => 'Voir les clients', 'code' => 'customers.view'],
+            ['name' => 'Créer un client', 'code' => 'customers.create'],
+            ['name' => 'Modifier un client', 'code' => 'customers.update'],
 
             // Livraisons
             ['name' => 'Voir les livraisons', 'code' => 'deliveries.view'],

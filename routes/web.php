@@ -1,6 +1,8 @@
 <?php
 
 
+
+use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\StockController;
 use App\Http\Controllers\ProductVariantController;
 use App\Http\Controllers\ProductController;
@@ -19,56 +21,67 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->name('categories.store');
 
     Route::put('/categories/{category}', [CategoryController::class, 'update'])
-    ->name('categories.update');   
-    
+        ->name('categories.update');
+
     Route::delete('/categories/{category}', [CategoryController::class, 'destroy'])
-    ->name('categories.destroy');
+        ->name('categories.destroy');
 
     Route::post('/products', [ProductController::class, 'store'])
-    ->name('products.store');
+        ->name('products.store');
 
-Route::get('/products/{product}', [ProductController::class, 'show'])
-    ->name('products.show');
+    Route::get('/products/{product}', [ProductController::class, 'show'])
+        ->name('products.show');
 
     Route::put('/products/{product}', [ProductController::class, 'update'])
-    ->name('products.update');
+        ->name('products.update');
 
     Route::delete('/products/{product}', [ProductController::class, 'destroy'])
-    ->name('products.destroy');
+        ->name('products.destroy');
 
     Route::post(
-    '/products/{product}/variants',
-    [ProductVariantController::class, 'store']
-)->name('product-variants.store');
+        '/products/{product}/variants',
+        [ProductVariantController::class, 'store']
+    )->name('product-variants.store');
 
-Route::get(
-    '/product-variants/{productVariant}',
-    [ProductVariantController::class, 'show']
-)->name('product-variants.show');
+    Route::get(
+        '/product-variants/{productVariant}',
+        [ProductVariantController::class, 'show']
+    )->name('product-variants.show');
 
-Route::put(
-    '/product-variants/{productVariant}',
-    [ProductVariantController::class, 'update']
-)->name('product-variants.update');
+    Route::put(
+        '/product-variants/{productVariant}',
+        [ProductVariantController::class, 'update']
+    )->name('product-variants.update');
 
-Route::delete(
-    '/product-variants/{productVariant}',
-    [ProductVariantController::class, 'destroy']
-)->name('product-variants.destroy');
+    Route::delete(
+        '/product-variants/{productVariant}',
+        [ProductVariantController::class, 'destroy']
+    )->name('product-variants.destroy');
 
-Route::get('/stock', [StockController::class, 'index'])
-    ->name('stock.index');
+    Route::get('/stock', [StockController::class, 'index'])
+        ->name('stock.index');
 
-Route::get('/stock/{stockLevel}', [StockController::class, 'show'])
-    ->name('stock.show');
+    Route::get('/stock/{stockLevel}', [StockController::class, 'show'])
+        ->name('stock.show');
 
-Route::post('/stock/{stockLevel}/receive', [StockController::class, 'receive'])
-    ->name('stock.receive');
+    Route::post('/stock/{stockLevel}/receive', [StockController::class, 'receive'])
+        ->name('stock.receive');
 
-Route::post('/stock/{stockLevel}/adjust-in', [StockController::class, 'adjustIn'])
-    ->name('stock.adjust-in');
+    Route::post('/stock/{stockLevel}/adjust-in', [StockController::class, 'adjustIn'])
+        ->name('stock.adjust-in');
 
-Route::post('/stock/{stockLevel}/adjust-out', [StockController::class, 'adjustOut'])
-    ->name('stock.adjust-out');
+    Route::post('/stock/{stockLevel}/adjust-out', [StockController::class, 'adjustOut'])
+        ->name('stock.adjust-out');
 
+    Route::get('/customers', [CustomerController::class, 'index'])
+        ->name('customers.index');
+
+    Route::get('/customers/{customer}', [CustomerController::class, 'show'])
+        ->name('customers.show');
+
+        Route::post('/customers', [CustomerController::class, 'store'])
+    ->name('customers.store');
+
+    Route::patch('/customers/{customer}', [CustomerController::class, 'update'])
+    ->name('customers.update');
 });

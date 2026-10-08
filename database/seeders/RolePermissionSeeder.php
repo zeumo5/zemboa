@@ -36,6 +36,8 @@ class RolePermissionSeeder extends Seeder
             'orders.update',
 
             'customers.view',
+            'customers.create',
+            'customers.update',
 
             'deliveries.view',
             'deliveries.update',
