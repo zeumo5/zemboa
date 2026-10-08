@@ -11,24 +11,28 @@ use Illuminate\Validation\ValidationException;
 
 class CreateStockReservation
 {
-   public function execute(
-    int $productVariantId,
-    int $quantity,
-    ?CarbonInterface $expiresAt = null
-): StockReservation {
+    public function execute(
+        int $productVariantId,
+        int $quantity,
+        ?CarbonInterface $expiresAt = null,
+        ?string $referenceType = null,
+        ?int $referenceId = null,
+    ): StockReservation {
 
-if ($quantity <= 0) {
-    throw ValidationException::withMessages([
-        'quantity' =>
-            'La quantité à réserver doit être supérieure à zéro.',
-    ]);
-}
+        if ($quantity <= 0) {
+            throw ValidationException::withMessages([
+                'quantity' =>
+                'La quantité à réserver doit être supérieure à zéro.',
+            ]);
+        }
 
-       return DB::transaction(function () use (
-    $productVariantId,
-    $quantity,
-    $expiresAt
-) {
+        return DB::transaction(function () use (
+            $productVariantId,
+            $quantity,
+            $expiresAt,
+            $referenceType,
+            $referenceId
+        ) {
             $stockLevel = StockLevel::query()
                 ->where('product_variant_id', $productVariantId)
                 ->lockForUpdate()
@@ -37,14 +41,14 @@ if ($quantity <= 0) {
             if ($stockLevel === null) {
                 throw ValidationException::withMessages([
                     'product_variant_id' =>
-                        'Le stock de cette variante est introuvable.',
+                    'Le stock de cette variante est introuvable.',
                 ]);
             }
 
             if ($quantity > $stockLevel->availableQuantity()) {
                 throw ValidationException::withMessages([
                     'quantity' =>
-                        'La quantité demandée dépasse le stock disponible.',
+                    'La quantité demandée dépasse le stock disponible.',
                 ]);
             }
 
@@ -52,11 +56,13 @@ if ($quantity <= 0) {
             $stockLevel->save();
 
             return StockReservation::create([
-    'product_variant_id' => $productVariantId,
-    'quantity' => $quantity,
-    'status' => 'ACTIVE',
-    'expires_at' => $expiresAt,
-]);
+                'product_variant_id' => $productVariantId,
+                'quantity' => $quantity,
+                'status' => 'ACTIVE',
+                'expires_at' => $expiresAt,
+                'reference_type' => $referenceType,
+                'reference_id' => $referenceId,
+            ]);
         });
     }
 }

@@ -1198,5 +1198,39 @@ public function test_user_without_inventory_view_cannot_view_stock_list(): void
     $this->assertFalse($allowed);
 }
 
+public function test_stock_reservation_can_store_order_reference(): void
+{
+    $movement = $this->createStockMovement();
+
+    $variant = $movement->productVariant;
+
+    app(ReceiveStock::class)->execute(
+        productVariantId: $variant->id,
+        quantity: 10,
+        userId: $movement->created_by,
+        reason: 'Stock initial'
+    );
+
+    $reservation = app(CreateStockReservation::class)->execute(
+        productVariantId: $variant->id,
+        quantity: 2,
+        referenceType: 'ORDER',
+        referenceId: 123
+    );
+
+    $this->assertSame('ORDER', $reservation->reference_type);
+    $this->assertSame(123, $reservation->reference_id);
+
+    $this->assertDatabaseHas('stock_reservations', [
+        'id' => $reservation->id,
+        'store_id' => $variant->store_id,
+        'product_variant_id' => $variant->id,
+        'quantity' => 2,
+        'status' => 'ACTIVE',
+        'reference_type' => 'ORDER',
+        'reference_id' => 123,
+    ]);
+}
+
 
 }
