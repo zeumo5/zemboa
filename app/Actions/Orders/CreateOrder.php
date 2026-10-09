@@ -2,6 +2,8 @@
 
 namespace App\Actions\Orders;
 
+
+use App\Models\DeliveryZone;
 use App\Actions\Customers\FindOrCreateCustomer;
 use App\Actions\Stock\CreateStockReservation;
 use App\Models\Order;
@@ -23,11 +25,31 @@ class CreateOrder
         ?string $customerEmail,
         string $fulfillmentType,
         array $items,
+        ?int $deliveryZoneId = null,
+        ?string $deliveryAddress = null,
+        ?string $deliveryArea = null,
+        ?string $deliveryInstructions = null,
+
     ): Order {
 
         if (! in_array($fulfillmentType, ['PICKUP', 'DELIVERY'], true)) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'fulfillment_type' => 'Le type de livraison doit être PICKUP ou DELIVERY.',
+            ]);
+        }
+
+        if ($fulfillmentType === 'DELIVERY' && $deliveryZoneId === null) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'delivery_zone_id' => 'Une zone de livraison est obligatoire pour une livraison.',
+            ]);
+        }
+
+        if (
+            $fulfillmentType === 'DELIVERY'
+            && ($deliveryAddress === null || trim($deliveryAddress) === '')
+        ) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'delivery_address' => 'Une adresse de livraison est obligatoire.',
             ]);
         }
 
@@ -82,6 +104,10 @@ class CreateOrder
             $customerEmail,
             $fulfillmentType,
             $items,
+            $deliveryZoneId,
+            $deliveryAddress,
+            $deliveryArea,
+            $deliveryInstructions,
         ) {
             $customer = $this->findOrCreateCustomer->execute(
                 name: $customerName,
@@ -89,7 +115,19 @@ class CreateOrder
                 email: $customerEmail,
             );
 
+            $deliveryZone = null;
+            $deliveryFee = '0.00';
+
+            if ($fulfillmentType === 'DELIVERY') {
+                $deliveryZone = DeliveryZone::query()
+                    ->where('status', 'ACTIVE')
+                    ->findOrFail($deliveryZoneId);
+
+                $deliveryFee = $deliveryZone->fee;
+            }
+
             $preparedItems = [];
+
 
             foreach ($items as $item) {
                 $variant = ProductVariant::query()
@@ -140,7 +178,7 @@ class CreateOrder
                     ],
                     $preparedItems
                 ),
-                deliveryFee: '0.00',
+                deliveryFee: $deliveryFee,
             );
 
             $reservationExpiresAt = now()->addMinutes(30);
@@ -151,7 +189,18 @@ class CreateOrder
                 'status' => 'PENDING',
                 'payment_status' => 'UNPAID',
                 'fulfillment_type' => $fulfillmentType,
+                'delivery_zone_name' => $deliveryZone?->name,
+                'delivery_city' => $deliveryZone?->city,
+                'delivery_address' => $deliveryAddress !== null
+                    ? trim($deliveryAddress)
+                    : null,
+                'delivery_area' => $deliveryArea !== null
+                    ? trim($deliveryArea)
+                    : null,
 
+                'delivery_instructions' => $deliveryInstructions !== null
+                    ? trim($deliveryInstructions)
+                    : null,
                 // Snapshot des informations du client au moment du checkout.
                 'customer_name' => $customerName,
                 'customer_phone' => $customer->phone,

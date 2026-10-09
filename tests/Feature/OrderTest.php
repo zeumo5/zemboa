@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-
+use App\Models\DeliveryZone;
 use App\Actions\ProductVariant\CreateProductVariant;
 use App\Actions\Stock\ReceiveStock;
 use App\Actions\Orders\CreateOrder;
@@ -707,382 +707,813 @@ class OrderTest extends TestCase
     }
 
     public function test_create_order_rejects_empty_items(): void
-{
-    $store = Store::create([
-        'name' => 'Boutique Alpha',
-        'slug' => 'boutique-alpha',
-        'status' => 'ACTIVE',
-    ]);
+    {
+        $store = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'boutique-alpha',
+            'status' => 'ACTIVE',
+        ]);
 
-    $user = User::factory()->create([
-        'store_id' => $store->id,
-    ]);
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+        ]);
 
-    app(TenantContext::class)->setFromUser($user);
+        app(TenantContext::class)->setFromUser($user);
 
-    try {
-        app(CreateOrder::class)->execute(
+        try {
+            app(CreateOrder::class)->execute(
+                customerName: 'Jean Client',
+                customerPhone: '690 000 001',
+                customerEmail: null,
+                fulfillmentType: 'PICKUP',
+                items: [],
+            );
+
+            $this->fail('Une commande sans article aurait dû être refusée.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey('items', $exception->errors());
+        }
+
+        $this->assertSame(0, Order::query()->count());
+        $this->assertSame(0, Customer::query()->count());
+    }
+
+    public function test_create_order_rejects_invalid_fulfillment_type(): void
+    {
+        $store = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'boutique-alpha',
+            'status' => 'ACTIVE',
+        ]);
+
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+        ]);
+
+        app(TenantContext::class)->setFromUser($user);
+
+        try {
+            app(CreateOrder::class)->execute(
+                customerName: 'Jean Client',
+                customerPhone: '690 000 001',
+                customerEmail: null,
+                fulfillmentType: 'INVALID',
+                items: [
+                    [
+                        'product_variant_id' => 1,
+                        'quantity' => 1,
+                    ],
+                ],
+            );
+
+            $this->fail('Un type de livraison invalide aurait dû être refusé.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey(
+                'fulfillment_type',
+                $exception->errors()
+            );
+        }
+
+        $this->assertSame(0, Order::query()->count());
+        $this->assertSame(0, Customer::query()->count());
+    }
+
+    public function test_create_order_cannot_use_product_variant_from_another_store(): void
+    {
+        $storeA = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'boutique-alpha',
+            'status' => 'ACTIVE',
+        ]);
+
+        $storeB = Store::create([
+            'name' => 'Boutique Beta',
+            'slug' => 'boutique-beta',
+            'status' => 'ACTIVE',
+        ]);
+
+        $userA = User::factory()->create([
+            'store_id' => $storeA->id,
+        ]);
+
+        $userB = User::factory()->create([
+            'store_id' => $storeB->id,
+        ]);
+
+        // Création du produit dans la boutique B.
+        app(TenantContext::class)->setFromUser($userB);
+
+        $categoryB = Category::create([
+            'name' => 'Téléphones',
+            'slug' => 'telephones',
+            'status' => 'ACTIVE',
+        ]);
+
+        $productB = Product::create([
+            'category_id' => $categoryB->id,
+            'name' => 'Téléphone Boutique B',
+            'slug' => 'telephone-boutique-b',
+            'status' => 'ACTIVE',
+        ]);
+
+        $variantB = app(CreateProductVariant::class)->execute([
+            'product_id' => $productB->id,
+            'sku' => 'STORE-B-001',
+            'price' => '10000.00',
+            'is_default' => true,
+            'status' => 'ACTIVE',
+        ]);
+
+        app(ReceiveStock::class)->execute(
+            productVariantId: $variantB->id,
+            quantity: 10,
+            userId: $userB->id,
+            reason: 'Stock boutique B'
+        );
+
+        // On repasse maintenant dans la boutique A.
+        app(TenantContext::class)->setFromUser($userA);
+
+        try {
+            app(CreateOrder::class)->execute(
+                customerName: 'Jean Client',
+                customerPhone: '690 000 001',
+                customerEmail: null,
+                fulfillmentType: 'PICKUP',
+                items: [
+                    [
+                        'product_variant_id' => $variantB->id,
+                        'quantity' => 1,
+                    ],
+                ],
+            );
+
+            $this->fail(
+                'Une boutique ne doit pas pouvoir commander une variante appartenant à une autre boutique.'
+            );
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $exception) {
+            $this->assertSame(
+                ProductVariant::class,
+                $exception->getModel()
+            );
+        }
+
+        $this->assertSame(0, Order::query()->count());
+        $this->assertSame(0, Customer::query()->count());
+    }
+
+    public function test_create_order_rejects_inactive_product_variant(): void
+    {
+        $store = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'boutique-alpha',
+            'status' => 'ACTIVE',
+        ]);
+
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+        ]);
+
+        app(TenantContext::class)->setFromUser($user);
+
+        $category = Category::create([
+            'name' => 'Téléphones',
+            'slug' => 'telephones',
+            'status' => 'ACTIVE',
+        ]);
+
+        $product = Product::create([
+            'category_id' => $category->id,
+            'name' => 'iPhone 17',
+            'slug' => 'iphone-17',
+            'status' => 'ACTIVE',
+        ]);
+
+        $variant = app(CreateProductVariant::class)->execute([
+            'product_id' => $product->id,
+            'sku' => 'IPH17-INACTIVE',
+            'price' => '10000.00',
+            'is_default' => true,
+            'status' => 'INACTIVE',
+        ]);
+
+
+        app(ReceiveStock::class)->execute(
+            productVariantId: $variant->id,
+            quantity: 10,
+            userId: $user->id,
+            reason: 'Stock initial'
+        );
+
+        try {
+            app(CreateOrder::class)->execute(
+                customerName: 'Jean Client',
+                customerPhone: '690 000 001',
+                customerEmail: null,
+                fulfillmentType: 'PICKUP',
+                items: [
+                    [
+                        'product_variant_id' => $variant->id,
+                        'quantity' => 1,
+                    ],
+                ],
+            );
+
+            $this->fail('Une variante inactive aurait dû être refusée.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey(
+                'items',
+                $exception->errors()
+            );
+        }
+
+        $this->assertSame(0, Order::query()->count());
+        $this->assertSame(0, $variant->stockReservations()->count());
+    }
+
+    public function test_create_order_rejects_variant_of_inactive_product(): void
+    {
+        $store = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'boutique-alpha',
+            'status' => 'ACTIVE',
+        ]);
+
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+        ]);
+
+        app(TenantContext::class)->setFromUser($user);
+
+        $category = Category::create([
+            'name' => 'Téléphones',
+            'slug' => 'telephones',
+            'status' => 'ACTIVE',
+        ]);
+
+        // Produit désactivé.
+        $product = Product::create([
+            'category_id' => $category->id,
+            'name' => 'iPhone 17',
+            'slug' => 'iphone-17',
+            'status' => 'INACTIVE',
+        ]);
+
+        // Mais sa variante est encore ACTIVE.
+        $variant = app(CreateProductVariant::class)->execute([
+            'product_id' => $product->id,
+            'sku' => 'IPH17-128',
+            'price' => '10000.00',
+            'is_default' => true,
+            'status' => 'ACTIVE',
+        ]);
+
+        app(ReceiveStock::class)->execute(
+            productVariantId: $variant->id,
+            quantity: 10,
+            userId: $user->id,
+            reason: 'Stock initial'
+        );
+
+        try {
+            app(CreateOrder::class)->execute(
+                customerName: 'Jean Client',
+                customerPhone: '690 000 001',
+                customerEmail: null,
+                fulfillmentType: 'PICKUP',
+                items: [
+                    [
+                        'product_variant_id' => $variant->id,
+                        'quantity' => 1,
+                    ],
+                ],
+            );
+
+            $this->fail(
+                'Une variante appartenant à un produit inactif aurait dû être refusée.'
+            );
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey(
+                'items',
+                $exception->errors()
+            );
+        }
+
+        $this->assertSame(0, Order::query()->count());
+        $this->assertSame(0, $variant->stockReservations()->count());
+    }
+
+    public function test_create_order_merges_duplicate_product_variants(): void
+    {
+        $store = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'boutique-alpha',
+            'status' => 'ACTIVE',
+        ]);
+
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+        ]);
+
+        app(TenantContext::class)->setFromUser($user);
+
+        $category = Category::create([
+            'name' => 'Téléphones',
+            'slug' => 'telephones',
+            'status' => 'ACTIVE',
+        ]);
+
+        $product = Product::create([
+            'category_id' => $category->id,
+            'name' => 'iPhone 17',
+            'slug' => 'iphone-17',
+            'status' => 'ACTIVE',
+        ]);
+
+        $variant = app(CreateProductVariant::class)->execute([
+            'product_id' => $product->id,
+            'sku' => 'IPH17-128',
+            'price' => '10000.00',
+            'is_default' => true,
+            'status' => 'ACTIVE',
+        ]);
+
+        app(ReceiveStock::class)->execute(
+            productVariantId: $variant->id,
+            quantity: 10,
+            userId: $user->id,
+            reason: 'Stock initial'
+        );
+
+        $order = app(CreateOrder::class)->execute(
             customerName: 'Jean Client',
             customerPhone: '690 000 001',
             customerEmail: null,
             fulfillmentType: 'PICKUP',
-            items: [],
-        );
-
-        $this->fail('Une commande sans article aurait dû être refusée.');
-    } catch (\Illuminate\Validation\ValidationException $exception) {
-        $this->assertArrayHasKey('items', $exception->errors());
-    }
-
-    $this->assertSame(0, Order::query()->count());
-    $this->assertSame(0, Customer::query()->count());
-}
-
-public function test_create_order_rejects_invalid_fulfillment_type(): void
-{
-    $store = Store::create([
-        'name' => 'Boutique Alpha',
-        'slug' => 'boutique-alpha',
-        'status' => 'ACTIVE',
-    ]);
-
-    $user = User::factory()->create([
-        'store_id' => $store->id,
-    ]);
-
-    app(TenantContext::class)->setFromUser($user);
-
-    try {
-        app(CreateOrder::class)->execute(
-            customerName: 'Jean Client',
-            customerPhone: '690 000 001',
-            customerEmail: null,
-            fulfillmentType: 'INVALID',
             items: [
                 [
-                    'product_variant_id' => 1,
-                    'quantity' => 1,
+                    'product_variant_id' => $variant->id,
+                    'quantity' => 2,
+                ],
+                [
+                    'product_variant_id' => $variant->id,
+                    'quantity' => 3,
                 ],
             ],
         );
 
-        $this->fail('Un type de livraison invalide aurait dû être refusé.');
-    } catch (\Illuminate\Validation\ValidationException $exception) {
-        $this->assertArrayHasKey(
-            'fulfillment_type',
-            $exception->errors()
-        );
+        $this->assertCount(1, $order->items);
+
+        $item = $order->items->first();
+
+        $this->assertSame($variant->id, $item->product_variant_id);
+        $this->assertSame(5, $item->quantity);
+        $this->assertSame('50000.00', $item->line_total);
+
+        $reservations = $variant->stockReservations()
+            ->where('reference_type', 'ORDER')
+            ->where('reference_id', $order->id)
+            ->get();
+
+        $this->assertCount(1, $reservations);
+        $this->assertSame(5, $reservations->first()->quantity);
+
+        $stockLevel = $variant->stockLevel()->firstOrFail();
+
+        $this->assertSame(10, $stockLevel->physical_quantity);
+        $this->assertSame(5, $stockLevel->reserved_quantity);
+        $this->assertSame(5, $stockLevel->availableQuantity());
     }
 
-    $this->assertSame(0, Order::query()->count());
-    $this->assertSame(0, Customer::query()->count());
-}
+    public function test_delivery_zone_is_automatically_attached_to_current_store(): void
+    {
+        $store = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'boutique-alpha',
+            'status' => 'ACTIVE',
+        ]);
 
-public function test_create_order_cannot_use_product_variant_from_another_store(): void
-{
-    $storeA = Store::create([
-        'name' => 'Boutique Alpha',
-        'slug' => 'boutique-alpha',
-        'status' => 'ACTIVE',
-    ]);
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+        ]);
 
-    $storeB = Store::create([
-        'name' => 'Boutique Beta',
-        'slug' => 'boutique-beta',
-        'status' => 'ACTIVE',
-    ]);
+        app(TenantContext::class)->setFromUser($user);
 
-    $userA = User::factory()->create([
-        'store_id' => $storeA->id,
-    ]);
+        $zone = DeliveryZone::create([
+            'name' => 'Bonaberi',
+            'city' => 'Douala',
+            'fee' => '1500.00',
+            'status' => 'ACTIVE',
+        ]);
 
-    $userB = User::factory()->create([
-        'store_id' => $storeB->id,
-    ]);
+        $this->assertSame($store->id, $zone->store_id);
+        $this->assertSame('1500.00', $zone->fee);
 
-    // Création du produit dans la boutique B.
-    app(TenantContext::class)->setFromUser($userB);
+        $this->assertDatabaseHas('delivery_zones', [
+            'id' => $zone->id,
+            'store_id' => $store->id,
+            'name' => 'Bonaberi',
+            'city' => 'Douala',
+        ]);
+    }
 
-    $categoryB = Category::create([
-        'name' => 'Téléphones',
-        'slug' => 'telephones',
-        'status' => 'ACTIVE',
-    ]);
+    public function test_delivery_zone_queries_are_isolated_by_store(): void
+    {
+        $storeA = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'boutique-alpha',
+            'status' => 'ACTIVE',
+        ]);
 
-    $productB = Product::create([
-        'category_id' => $categoryB->id,
-        'name' => 'Téléphone Boutique B',
-        'slug' => 'telephone-boutique-b',
-        'status' => 'ACTIVE',
-    ]);
+        $storeB = Store::create([
+            'name' => 'Boutique Beta',
+            'slug' => 'boutique-beta',
+            'status' => 'ACTIVE',
+        ]);
 
-    $variantB = app(CreateProductVariant::class)->execute([
-        'product_id' => $productB->id,
-        'sku' => 'STORE-B-001',
-        'price' => '10000.00',
-        'is_default' => true,
-        'status' => 'ACTIVE',
-    ]);
+        $userA = User::factory()->create([
+            'store_id' => $storeA->id,
+        ]);
 
-    app(ReceiveStock::class)->execute(
-        productVariantId: $variantB->id,
-        quantity: 10,
-        userId: $userB->id,
-        reason: 'Stock boutique B'
-    );
+        $userB = User::factory()->create([
+            'store_id' => $storeB->id,
+        ]);
 
-    // On repasse maintenant dans la boutique A.
-    app(TenantContext::class)->setFromUser($userA);
+        // Zone de la boutique B.
+        app(TenantContext::class)->setFromUser($userB);
 
-    try {
-        app(CreateOrder::class)->execute(
+        $zoneB = DeliveryZone::create([
+            'name' => 'Bonamoussadi',
+            'city' => 'Douala',
+            'fee' => '2000.00',
+            'status' => 'ACTIVE',
+        ]);
+
+        // On repasse dans la boutique A.
+        app(TenantContext::class)->setFromUser($userA);
+
+        $this->assertNull(
+            DeliveryZone::query()->find($zoneB->id)
+        );
+
+        $this->assertSame(0, DeliveryZone::query()->count());
+    }
+
+    public function test_delivery_order_requires_delivery_zone(): void
+    {
+        $store = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'boutique-alpha',
+            'status' => 'ACTIVE',
+        ]);
+
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+        ]);
+
+        app(TenantContext::class)->setFromUser($user);
+
+        $category = Category::create([
+            'name' => 'Téléphones',
+            'slug' => 'telephones',
+            'status' => 'ACTIVE',
+        ]);
+
+        $product = Product::create([
+            'category_id' => $category->id,
+            'name' => 'iPhone 17',
+            'slug' => 'iphone-17',
+            'status' => 'ACTIVE',
+        ]);
+
+        $variant = app(CreateProductVariant::class)->execute([
+            'product_id' => $product->id,
+            'sku' => 'IPH17-DELIVERY',
+            'price' => '10000.00',
+            'is_default' => true,
+            'status' => 'ACTIVE',
+        ]);
+
+        app(ReceiveStock::class)->execute(
+            productVariantId: $variant->id,
+            quantity: 10,
+            userId: $user->id,
+            reason: 'Stock initial'
+        );
+
+        try {
+            app(CreateOrder::class)->execute(
+                customerName: 'Jean Client',
+                customerPhone: '690 000 001',
+                customerEmail: null,
+                fulfillmentType: 'DELIVERY',
+                items: [
+                    [
+                        'product_variant_id' => $variant->id,
+                        'quantity' => 1,
+                    ],
+                ],
+            );
+
+            $this->fail(
+                'Une commande DELIVERY sans zone de livraison aurait dû être refusée.'
+            );
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey(
+                'delivery_zone_id',
+                $exception->errors()
+            );
+        }
+
+        $this->assertSame(0, Order::query()->count());
+        $this->assertSame(0, $variant->stockReservations()->count());
+    }
+
+    public function test_delivery_order_uses_authoritative_delivery_zone_fee(): void
+    {
+        $store = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'boutique-alpha',
+            'status' => 'ACTIVE',
+        ]);
+
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+        ]);
+
+        app(TenantContext::class)->setFromUser($user);
+
+        $zone = DeliveryZone::create([
+            'name' => 'Bonaberi',
+            'city' => 'Douala',
+            'fee' => '1500.00',
+            'status' => 'ACTIVE',
+        ]);
+
+        $category = Category::create([
+            'name' => 'Téléphones',
+            'slug' => 'telephones',
+            'status' => 'ACTIVE',
+        ]);
+
+        $product = Product::create([
+            'category_id' => $category->id,
+            'name' => 'iPhone 17',
+            'slug' => 'iphone-17',
+            'status' => 'ACTIVE',
+        ]);
+
+        $variant = app(CreateProductVariant::class)->execute([
+            'product_id' => $product->id,
+            'sku' => 'IPH17-DELIVERY',
+            'price' => '10000.00',
+            'is_default' => true,
+            'status' => 'ACTIVE',
+        ]);
+
+        app(ReceiveStock::class)->execute(
+            productVariantId: $variant->id,
+            quantity: 10,
+            userId: $user->id,
+            reason: 'Stock initial'
+        );
+
+        $order = app(CreateOrder::class)->execute(
             customerName: 'Jean Client',
             customerPhone: '690 000 001',
             customerEmail: null,
-            fulfillmentType: 'PICKUP',
+            fulfillmentType: 'DELIVERY',
             items: [
                 [
-                    'product_variant_id' => $variantB->id,
+                    'product_variant_id' => $variant->id,
                     'quantity' => 1,
                 ],
             ],
+            deliveryZoneId: $zone->id,
+            deliveryAddress: 'Derrière le lycée polyvalent',
+            deliveryArea: 'Mambanda',
+            deliveryInstructions: 'Appeler à mon arrivée',
         );
 
-        $this->fail(
-            'Une boutique ne doit pas pouvoir commander une variante appartenant à une autre boutique.'
-        );
-    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $exception) {
+        $this->assertSame('DELIVERY', $order->fulfillment_type);
+        $this->assertSame('Bonaberi', $order->delivery_zone_name);
+
+        $this->assertSame('Douala', $order->delivery_city);
+
         $this->assertSame(
-            ProductVariant::class,
-            $exception->getModel()
+            'Derrière le lycée polyvalent',
+            $order->delivery_address
         );
+
+        $this->assertSame(
+            'Mambanda',
+            $order->delivery_area
+        );
+
+        $this->assertSame(
+            'Appeler à mon arrivée',
+            $order->delivery_instructions
+        );
+
+        $this->assertSame('10000.00', $order->subtotal);
+        $this->assertSame('1500.00', $order->delivery_fee);
+        $this->assertSame('11500.00', $order->total);
     }
 
-    $this->assertSame(0, Order::query()->count());
-    $this->assertSame(0, Customer::query()->count());
-}
+    public function test_delivery_order_cannot_use_zone_from_another_store(): void
+    {
+        $storeA = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'boutique-alpha',
+            'status' => 'ACTIVE',
+        ]);
 
-public function test_create_order_rejects_inactive_product_variant(): void
-{
-    $store = Store::create([
-        'name' => 'Boutique Alpha',
-        'slug' => 'boutique-alpha',
-        'status' => 'ACTIVE',
-    ]);
+        $storeB = Store::create([
+            'name' => 'Boutique Beta',
+            'slug' => 'boutique-beta',
+            'status' => 'ACTIVE',
+        ]);
 
-    $user = User::factory()->create([
-        'store_id' => $store->id,
-    ]);
+        $userA = User::factory()->create([
+            'store_id' => $storeA->id,
+        ]);
 
-    app(TenantContext::class)->setFromUser($user);
+        $userB = User::factory()->create([
+            'store_id' => $storeB->id,
+        ]);
 
-    $category = Category::create([
-        'name' => 'Téléphones',
-        'slug' => 'telephones',
-        'status' => 'ACTIVE',
-    ]);
+        // Création de la zone dans la boutique B.
+        app(TenantContext::class)->setFromUser($userB);
 
-    $product = Product::create([
-        'category_id' => $category->id,
-        'name' => 'iPhone 17',
-        'slug' => 'iphone-17',
-        'status' => 'ACTIVE',
-    ]);
+        $zoneB = DeliveryZone::create([
+            'name' => 'Bonamoussadi',
+            'city' => 'Douala',
+            'fee' => '2000.00',
+            'status' => 'ACTIVE',
+        ]);
 
-    $variant = app(CreateProductVariant::class)->execute([
-        'product_id' => $product->id,
-        'sku' => 'IPH17-INACTIVE',
-        'price' => '10000.00',
-        'is_default' => true,
-        'status' => 'INACTIVE',
-    ]);
-    
+        // On passe maintenant dans la boutique A.
+        app(TenantContext::class)->setFromUser($userA);
 
-    app(ReceiveStock::class)->execute(
-        productVariantId: $variant->id,
-        quantity: 10,
-        userId: $user->id,
-        reason: 'Stock initial'
-    );
-
-    try {
-        app(CreateOrder::class)->execute(
-            customerName: 'Jean Client',
-            customerPhone: '690 000 001',
-            customerEmail: null,
-            fulfillmentType: 'PICKUP',
-            items: [
-                [
-                    'product_variant_id' => $variant->id,
-                    'quantity' => 1,
+        try {
+            app(CreateOrder::class)->execute(
+                customerName: 'Jean Client',
+                customerPhone: '690 000 001',
+                customerEmail: null,
+                fulfillmentType: 'DELIVERY',
+                items: [
+                    [
+                        // L'ID n'a pas besoin d'exister :
+                        // la zone doit être refusée avant le checkout.
+                        'product_variant_id' => 1,
+                        'quantity' => 1,
+                    ],
                 ],
-            ],
-        );
+                deliveryZoneId: $zoneB->id,
+                deliveryAddress: 'Adresse de test',
+            );
 
-        $this->fail('Une variante inactive aurait dû être refusée.');
-    } catch (\Illuminate\Validation\ValidationException $exception) {
-        $this->assertArrayHasKey(
-            'items',
-            $exception->errors()
-        );
+            $this->fail(
+                'Une boutique ne doit pas pouvoir utiliser la zone de livraison d’une autre boutique.'
+            );
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $exception) {
+            $this->assertSame(
+                DeliveryZone::class,
+                $exception->getModel()
+            );
+        }
+
+        $this->assertSame(0, Order::query()->count());
+        $this->assertSame(0, Customer::query()->count());
     }
 
-    $this->assertSame(0, Order::query()->count());
-    $this->assertSame(0, $variant->stockReservations()->count());
-}
+    public function test_delivery_order_rejects_inactive_delivery_zone(): void
+    {
+        $store = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'boutique-alpha',
+            'status' => 'ACTIVE',
+        ]);
 
-public function test_create_order_rejects_variant_of_inactive_product(): void
-{
-    $store = Store::create([
-        'name' => 'Boutique Alpha',
-        'slug' => 'boutique-alpha',
-        'status' => 'ACTIVE',
-    ]);
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+        ]);
 
-    $user = User::factory()->create([
-        'store_id' => $store->id,
-    ]);
+        app(TenantContext::class)->setFromUser($user);
 
-    app(TenantContext::class)->setFromUser($user);
+        $zone = DeliveryZone::create([
+            'name' => 'Bonaberi',
+            'city' => 'Douala',
+            'fee' => '1500.00',
+            'status' => 'INACTIVE',
+        ]);
 
-    $category = Category::create([
-        'name' => 'Téléphones',
-        'slug' => 'telephones',
-        'status' => 'ACTIVE',
-    ]);
-
-    // Produit désactivé.
-    $product = Product::create([
-        'category_id' => $category->id,
-        'name' => 'iPhone 17',
-        'slug' => 'iphone-17',
-        'status' => 'INACTIVE',
-    ]);
-
-    // Mais sa variante est encore ACTIVE.
-    $variant = app(CreateProductVariant::class)->execute([
-        'product_id' => $product->id,
-        'sku' => 'IPH17-128',
-        'price' => '10000.00',
-        'is_default' => true,
-        'status' => 'ACTIVE',
-    ]);
-
-    app(ReceiveStock::class)->execute(
-        productVariantId: $variant->id,
-        quantity: 10,
-        userId: $user->id,
-        reason: 'Stock initial'
-    );
-
-    try {
-        app(CreateOrder::class)->execute(
-            customerName: 'Jean Client',
-            customerPhone: '690 000 001',
-            customerEmail: null,
-            fulfillmentType: 'PICKUP',
-            items: [
-                [
-                    'product_variant_id' => $variant->id,
-                    'quantity' => 1,
+        try {
+            app(CreateOrder::class)->execute(
+                customerName: 'Jean Client',
+                customerPhone: '690 000 001',
+                customerEmail: null,
+                fulfillmentType: 'DELIVERY',
+                items: [
+                    [
+                        'product_variant_id' => 1,
+                        'quantity' => 1,
+                    ],
                 ],
-            ],
-        );
+                deliveryZoneId: $zone->id,
+                deliveryAddress: 'Adresse de test',
+            );
 
-        $this->fail(
-            'Une variante appartenant à un produit inactif aurait dû être refusée.'
-        );
-    } catch (\Illuminate\Validation\ValidationException $exception) {
-        $this->assertArrayHasKey(
-            'items',
-            $exception->errors()
-        );
+            $this->fail(
+                'Une zone de livraison inactive aurait dû être refusée.'
+            );
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $exception) {
+            $this->assertSame(
+                DeliveryZone::class,
+                $exception->getModel()
+            );
+        }
+
+        $this->assertSame(0, Order::query()->count());
+        $this->assertSame(0, Customer::query()->count());
     }
 
-    $this->assertSame(0, Order::query()->count());
-    $this->assertSame(0, $variant->stockReservations()->count());
-}
+    public function test_delivery_order_requires_delivery_address(): void
+    {
+        $store = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'boutique-alpha',
+            'status' => 'ACTIVE',
+        ]);
 
-public function test_create_order_merges_duplicate_product_variants(): void
-{
-    $store = Store::create([
-        'name' => 'Boutique Alpha',
-        'slug' => 'boutique-alpha',
-        'status' => 'ACTIVE',
-    ]);
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+        ]);
 
-    $user = User::factory()->create([
-        'store_id' => $store->id,
-    ]);
+        app(TenantContext::class)->setFromUser($user);
 
-    app(TenantContext::class)->setFromUser($user);
+        $zone = DeliveryZone::create([
+            'name' => 'Bonaberi',
+            'city' => 'Douala',
+            'fee' => '1500.00',
+            'status' => 'ACTIVE',
+        ]);
 
-    $category = Category::create([
-        'name' => 'Téléphones',
-        'slug' => 'telephones',
-        'status' => 'ACTIVE',
-    ]);
+        $category = Category::create([
+            'name' => 'Téléphones',
+            'slug' => 'telephones',
+            'status' => 'ACTIVE',
+        ]);
 
-    $product = Product::create([
-        'category_id' => $category->id,
-        'name' => 'iPhone 17',
-        'slug' => 'iphone-17',
-        'status' => 'ACTIVE',
-    ]);
+        $product = Product::create([
+            'category_id' => $category->id,
+            'name' => 'iPhone 17',
+            'slug' => 'iphone-17',
+            'status' => 'ACTIVE',
+        ]);
 
-    $variant = app(CreateProductVariant::class)->execute([
-        'product_id' => $product->id,
-        'sku' => 'IPH17-128',
-        'price' => '10000.00',
-        'is_default' => true,
-        'status' => 'ACTIVE',
-    ]);
+        $variant = app(CreateProductVariant::class)->execute([
+            'product_id' => $product->id,
+            'sku' => 'IPH17-DELIVERY-ADDRESS',
+            'price' => '10000.00',
+            'is_default' => true,
+            'status' => 'ACTIVE',
+        ]);
 
-    app(ReceiveStock::class)->execute(
-        productVariantId: $variant->id,
-        quantity: 10,
-        userId: $user->id,
-        reason: 'Stock initial'
-    );
+        app(ReceiveStock::class)->execute(
+            productVariantId: $variant->id,
+            quantity: 10,
+            userId: $user->id,
+            reason: 'Stock initial'
+        );
 
-    $order = app(CreateOrder::class)->execute(
-        customerName: 'Jean Client',
-        customerPhone: '690 000 001',
-        customerEmail: null,
-        fulfillmentType: 'PICKUP',
-        items: [
-            [
-                'product_variant_id' => $variant->id,
-                'quantity' => 2,
-            ],
-            [
-                'product_variant_id' => $variant->id,
-                'quantity' => 3,
-            ],
-        ],
-    );
+        try {
+            app(CreateOrder::class)->execute(
+                customerName: 'Jean Client',
+                customerPhone: '690 000 001',
+                customerEmail: null,
+                fulfillmentType: 'DELIVERY',
+                items: [
+                    [
+                        'product_variant_id' => $variant->id,
+                        'quantity' => 1,
+                    ],
+                ],
+                deliveryZoneId: $zone->id,
+            );
 
-    $this->assertCount(1, $order->items);
 
-    $item = $order->items->first();
+            $this->fail(
+                'Une commande DELIVERY sans adresse aurait dû être refusée.'
+            );
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey(
+                'delivery_address',
+                $exception->errors()
+            );
+        }
 
-    $this->assertSame($variant->id, $item->product_variant_id);
-    $this->assertSame(5, $item->quantity);
-    $this->assertSame('50000.00', $item->line_total);
-
-    $reservations = $variant->stockReservations()
-        ->where('reference_type', 'ORDER')
-        ->where('reference_id', $order->id)
-        ->get();
-
-    $this->assertCount(1, $reservations);
-    $this->assertSame(5, $reservations->first()->quantity);
-
-    $stockLevel = $variant->stockLevel()->firstOrFail();
-
-    $this->assertSame(10, $stockLevel->physical_quantity);
-    $this->assertSame(5, $stockLevel->reserved_quantity);
-    $this->assertSame(5, $stockLevel->availableQuantity());
-}
-
+        $this->assertSame(0, Order::query()->count());
+        $this->assertSame(0, $variant->stockReservations()->count());
+    }
 }
