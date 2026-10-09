@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Orders\CancelOrder;
+use App\Models\StockReservation;
 use App\Models\DeliveryZone;
 use App\Actions\ProductVariant\CreateProductVariant;
 use App\Actions\Stock\ReceiveStock;
@@ -1585,4 +1587,263 @@ app(ReceiveStock::class)->execute(
     $this->assertNull($order->delivery_instructions);
     $this->assertSame('0.00', $order->delivery_fee);
 }
+
+public function test_pending_unpaid_order_can_be_cancelled_and_releases_stock(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'iPhone 17',
+        'slug' => 'iphone-17',
+        'status' => 'ACTIVE',
+    ]);
+
+    $variant = app(CreateProductVariant::class)->execute([
+        'product_id' => $product->id,
+        'sku' => 'IPH17-CANCEL',
+        'price' => '10000.00',
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    app(ReceiveStock::class)->execute(
+        productVariantId: $variant->id,
+        quantity: 10,
+        userId: $user->id,
+        reason: 'Stock initial'
+    );
+
+    $order = app(CreateOrder::class)->execute(
+        customerName: 'Jean Client',
+        customerPhone: '690 000 001',
+        customerEmail: null,
+        fulfillmentType: 'PICKUP',
+        items: [
+            [
+                'product_variant_id' => $variant->id,
+                'quantity' => 2,
+            ],
+        ],
+    );
+
+    $reservation = StockReservation::query()
+        ->where('reference_type', 'ORDER')
+        ->where('reference_id', $order->id)
+        ->firstOrFail();
+
+    $this->assertSame('PENDING', $order->status);
+    $this->assertSame('UNPAID', $order->payment_status);
+    $this->assertSame('ACTIVE', $reservation->status);
+
+    $stockLevel = $variant->stockLevel()->firstOrFail();
+
+    $this->assertSame(10, $stockLevel->physical_quantity);
+    $this->assertSame(2, $stockLevel->reserved_quantity);
+
+    app(CancelOrder::class)->execute($order->id);
+
+$order->refresh();
+$reservation->refresh();
+$stockLevel->refresh();
+
+$this->assertSame('CANCELLED', $order->status);
+
+$this->assertSame('RELEASED', $reservation->status);
+$this->assertNotNull($reservation->released_at);
+
+$this->assertSame(10, $stockLevel->physical_quantity);
+$this->assertSame(0, $stockLevel->reserved_quantity);
+$this->assertSame(10, $stockLevel->availableQuantity());
+}
+
+public function test_paid_order_cannot_be_cancelled(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $customer = Customer::create([
+        'name' => 'Jean Client',
+        'phone' => '+237690000001',
+    ]);
+
+    $order = Order::create([
+        'customer_id' => $customer->id,
+        'order_number' => 'ZM-CANCEL-PAID',
+        'status' => 'PENDING',
+        'payment_status' => 'PAID',
+        'fulfillment_type' => 'PICKUP',
+        'customer_name' => 'Jean Client',
+        'customer_phone' => '+237690000001',
+        'subtotal' => '10000.00',
+        'discount_amount' => '0.00',
+        'delivery_fee' => '0.00',
+        'total' => '10000.00',
+    ]);
+
+    try {
+        app(CancelOrder::class)->execute($order->id);
+
+        $this->fail(
+            'Une commande payée ne devrait pas pouvoir être annulée directement.'
+        );
+    } catch (\Illuminate\Validation\ValidationException $exception) {
+        $this->assertArrayHasKey(
+            'payment_status',
+            $exception->errors()
+        );
+    }
+
+    $order->refresh();
+
+    $this->assertSame('PENDING', $order->status);
+    $this->assertSame('PAID', $order->payment_status);
+}
+
+public function test_cancelled_order_cannot_be_cancelled_again(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $customer = Customer::create([
+        'name' => 'Jean Client',
+        'phone' => '+237690000001',
+    ]);
+
+    $order = Order::create([
+        'customer_id' => $customer->id,
+        'order_number' => 'ZM-CANCEL-TWICE',
+        'status' => 'CANCELLED',
+        'payment_status' => 'UNPAID',
+        'fulfillment_type' => 'PICKUP',
+        'customer_name' => 'Jean Client',
+        'customer_phone' => '+237690000001',
+        'subtotal' => '10000.00',
+        'discount_amount' => '0.00',
+        'delivery_fee' => '0.00',
+        'total' => '10000.00',
+    ]);
+
+    try {
+        app(CancelOrder::class)->execute($order->id);
+
+        $this->fail(
+            'Une commande déjà annulée ne devrait pas pouvoir être annulée une deuxième fois.'
+        );
+    } catch (\Illuminate\Validation\ValidationException $exception) {
+        $this->assertArrayHasKey(
+            'status',
+            $exception->errors()
+        );
+    }
+
+    $order->refresh();
+
+    $this->assertSame('CANCELLED', $order->status);
+    $this->assertSame('UNPAID', $order->payment_status);
+}
+
+public function test_order_cannot_be_cancelled_from_another_store(): void
+{
+    $storeA = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $storeB = Store::create([
+        'name' => 'Boutique Beta',
+        'slug' => 'boutique-beta',
+        'status' => 'ACTIVE',
+    ]);
+
+    $userA = User::factory()->create([
+        'store_id' => $storeA->id,
+    ]);
+
+    $userB = User::factory()->create([
+        'store_id' => $storeB->id,
+    ]);
+
+    // Création de la commande dans la boutique B.
+    app(TenantContext::class)->setFromUser($userB);
+
+    $customerB = Customer::create([
+        'name' => 'Client Beta',
+        'phone' => '+237690000001',
+    ]);
+
+    $orderB = Order::create([
+        'customer_id' => $customerB->id,
+        'order_number' => 'ZM-CANCEL-STORE-B',
+        'status' => 'PENDING',
+        'payment_status' => 'UNPAID',
+        'fulfillment_type' => 'PICKUP',
+        'customer_name' => 'Client Beta',
+        'customer_phone' => '+237690000001',
+        'subtotal' => '10000.00',
+        'discount_amount' => '0.00',
+        'delivery_fee' => '0.00',
+        'total' => '10000.00',
+    ]);
+
+    // On passe maintenant dans la boutique A.
+    app(TenantContext::class)->setFromUser($userA);
+
+    try {
+        app(CancelOrder::class)->execute($orderB->id);
+
+        $this->fail(
+            'Une boutique ne devrait pas pouvoir annuler la commande d’une autre boutique.'
+        );
+    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $exception) {
+        $this->assertSame(
+            Order::class,
+            $exception->getModel()
+        );
+    }
+
+    // Vérification depuis le tenant propriétaire.
+    app(TenantContext::class)->setFromUser($userB);
+
+    $orderB->refresh();
+
+    $this->assertSame('PENDING', $orderB->status);
+    $this->assertSame('UNPAID', $orderB->payment_status);
+}
+
 }
