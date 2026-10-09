@@ -1265,7 +1265,7 @@ class OrderTest extends TestCase
 
         $variant = app(CreateProductVariant::class)->execute([
             'product_id' => $product->id,
-            'sku' => 'IPH17-DELIVERY',
+           'sku' => 'PICKUP-IGNORE-001',
             'price' => '10000.00',
             'is_default' => true,
             'status' => 'ACTIVE',
@@ -1516,4 +1516,73 @@ class OrderTest extends TestCase
         $this->assertSame(0, Order::query()->count());
         $this->assertSame(0, $variant->stockReservations()->count());
     }
+
+    public function test_pickup_order_ignores_delivery_information(): void
+{
+   $store = Store::create([
+    'name' => 'Boutique Pickup',
+    'slug' => 'boutique-pickup',
+    'status' => 'ACTIVE',
+]);
+
+$user = User::factory()->create([
+    'store_id' => $store->id,
+]);
+
+$this->actingAs($user);
+
+app(TenantContext::class)->setFromUser($user);
+    
+$category = Category::create([
+    'name' => 'Produits Pickup',
+    'slug' => 'produits-pickup',
+    'status' => 'ACTIVE',
+]);
+
+$product = Product::create([
+    'category_id' => $category->id,
+    'name' => 'Produit Pickup',
+    'slug' => 'produit-pickup',
+    'status' => 'ACTIVE',
+]);
+
+$variant = app(CreateProductVariant::class)->execute([
+    'product_id' => $product->id,
+    'sku' => 'PICKUP-IGNORE-001',
+    'price' => '10000.00',
+    'is_default' => true,
+    'status' => 'ACTIVE',
+]);
+
+app(ReceiveStock::class)->execute(
+    productVariantId: $variant->id,
+    quantity: 10,
+    userId: $user->id,
+    reason: 'Stock initial'
+);
+
+    $order = app(CreateOrder::class)->execute(
+        customerName: 'Junior Zeumo',
+        customerPhone: '690000001',
+        customerEmail: null,
+        fulfillmentType: 'PICKUP',
+        items: [
+            [
+                'product_variant_id' => $variant->id,
+                'quantity' => 1,
+            ],
+        ],
+        deliveryAddress: 'Une adresse qui doit être ignorée',
+        deliveryArea: 'Bonaberi',
+        deliveryInstructions: 'Appelez-moi',
+    );
+
+    $this->assertSame('PICKUP', $order->fulfillment_type);
+    $this->assertNull($order->delivery_zone_name);
+    $this->assertNull($order->delivery_city);
+    $this->assertNull($order->delivery_area);
+    $this->assertNull($order->delivery_address);
+    $this->assertNull($order->delivery_instructions);
+    $this->assertSame('0.00', $order->delivery_fee);
+}
 }

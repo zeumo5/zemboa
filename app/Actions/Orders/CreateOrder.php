@@ -191,14 +191,15 @@ class CreateOrder
                 'fulfillment_type' => $fulfillmentType,
                 'delivery_zone_name' => $deliveryZone?->name,
                 'delivery_city' => $deliveryZone?->city,
-                'delivery_address' => $deliveryAddress !== null
-                    ? trim($deliveryAddress)
-                    : null,
-                'delivery_area' => $deliveryArea !== null
+                'delivery_area' => $fulfillmentType === 'DELIVERY' && $deliveryArea !== null
                     ? trim($deliveryArea)
                     : null,
 
-                'delivery_instructions' => $deliveryInstructions !== null
+                'delivery_address' => $fulfillmentType === 'DELIVERY' && $deliveryAddress !== null
+                    ? trim($deliveryAddress)
+                    : null,
+
+                'delivery_instructions' => $fulfillmentType === 'DELIVERY' && $deliveryInstructions !== null
                     ? trim($deliveryInstructions)
                     : null,
                 // Snapshot des informations du client au moment du checkout.
