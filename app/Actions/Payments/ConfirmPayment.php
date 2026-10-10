@@ -3,6 +3,8 @@
 namespace App\Actions\Payments;
 
 
+
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Auth\Access\AuthorizationException;
 use App\Models\User;
 use App\Actions\Stock\ConvertStockReservation;
@@ -16,13 +18,18 @@ class ConfirmPayment
 {
     public function __construct(
         private ConvertStockReservation $convertStockReservation
-    ) {
-    }
+    ) {}
 
-    public function execute(int $paymentId, ?int $userId = null): Payment
-    {
-        return DB::transaction(function () use ($paymentId, $userId) {
-
+    public function execute(
+        int $paymentId,
+        ?int $userId = null,
+        ?string $balanceDueAt = null
+    ): Payment {
+        return DB::transaction(function () use (
+            $paymentId,
+            $userId,
+            $balanceDueAt
+        ) {
             // Identifier la commande dans le contexte de la boutique.
             $paymentLookup = Payment::query()
                 ->whereKey($paymentId)
@@ -85,7 +92,7 @@ class ConfirmPayment
                 ]);
             }
 
-            
+
             // Vérifier que le caissier appartient
             // à la boutique de la commande.
             $cashier = User::query()
@@ -96,11 +103,11 @@ class ConfirmPayment
             if ($cashier === null) {
                 throw ValidationException::withMessages([
                     'user' =>
-                        'Ce caissier n’appartient pas à cette boutique.',
+                    'Ce caissier n’appartient pas à cette boutique.',
                 ]);
             }
 
-            
+
             // Vérifier que le caissier est bien
             // l'utilisateur actuellement connecté.
             if (auth()->id() !== $cashier->id) {
@@ -150,7 +157,7 @@ class ConfirmPayment
                 ->get(['amount']);
 
             $alreadyPaid = $confirmedPayments->sum(
-                fn (Payment $item) => $amountToCents($item->amount)
+                fn(Payment $item) => $amountToCents($item->amount)
             );
 
             $newTotalPaid = $alreadyPaid + $paymentAmount;
@@ -160,6 +167,44 @@ class ConfirmPayment
                     'amount' => 'Le paiement dépasse le solde de la commande.',
                 ]);
             }
+
+            
+            // Si la commande reste partiellement payée,
+            // elle doit posséder une date limite future
+            // pour le paiement du solde.
+            if ($newTotalPaid < $orderTotal) {
+
+                if ($order->balance_due_at === null) {
+                    Validator::make(
+                        [
+                            'balance_due_at' => $balanceDueAt,
+                        ],
+                        [
+                            'balance_due_at' => [
+                                'required',
+                                'date_format:Y-m-d H:i:s',
+                                'after:now',
+                            ],
+                        ],
+                        [
+                            'balance_due_at.required' =>
+                                'La date limite du solde est obligatoire.',
+                            'balance_due_at.date_format' =>
+                                'Le format attendu est AAAA-MM-JJ HH:MM:SS.',
+                            'balance_due_at.after' =>
+                                'La date limite doit être dans le futur.',
+                        ]
+                    )->validate();
+
+                    $order->balance_due_at = $balanceDueAt;
+                } elseif ($balanceDueAt !== null) {
+                    throw ValidationException::withMessages([
+                        'balance_due_at' =>
+                            'La date limite existe déjà. Sa modification nécessite une opération distincte.',
+                    ]);
+                }
+            }
+
 
             $cashReceived = $payment->cash_received === null
                 ? null
