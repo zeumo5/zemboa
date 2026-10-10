@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Validation\ValidationException;
+use App\Actions\Orders\ExpireOrder;
 use App\Actions\Orders\CancelOrder;
 use App\Models\StockReservation;
 use App\Models\DeliveryZone;
@@ -1838,6 +1840,305 @@ public function test_order_cannot_be_cancelled_from_another_store(): void
     }
 
     // Vérification depuis le tenant propriétaire.
+    app(TenantContext::class)->setFromUser($userB);
+
+    $orderB->refresh();
+
+    $this->assertSame('PENDING', $orderB->status);
+    $this->assertSame('UNPAID', $orderB->payment_status);
+}
+
+public function test_pending_unpaid_order_expires_after_reservation_deadline(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Expiration',
+        'slug' => 'boutique-expiration',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones-expiration',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Téléphone Expiration',
+        'slug' => 'telephone-expiration',
+        'status' => 'ACTIVE',
+    ]);
+
+    $variant = app(CreateProductVariant::class)->execute([
+        'product_id' => $product->id,
+        'sku' => 'EXPIRATION-001',
+        'price' => '10000.00',
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    app(ReceiveStock::class)->execute(
+        productVariantId: $variant->id,
+        quantity: 10,
+        userId: $user->id,
+        reason: 'Stock initial'
+    );
+
+    $order = app(CreateOrder::class)->execute(
+        customerName: 'Jean Client',
+        customerPhone: '690 000 001',
+        customerEmail: null,
+        fulfillmentType: 'PICKUP',
+        items: [
+            [
+                'product_variant_id' => $variant->id,
+                'quantity' => 2,
+            ],
+        ],
+    );
+
+    $reservation = $variant->stockReservations()
+        ->where('reference_type', 'ORDER')
+        ->where('reference_id', $order->id)
+        ->firstOrFail();
+
+    $this->assertSame('PENDING', $order->status);
+    $this->assertSame('UNPAID', $order->payment_status);
+    $this->assertSame('ACTIVE', $reservation->status);
+
+    $this->travel(31)->minutes();
+
+    app(ExpireOrder::class)->execute($order->id);
+
+    $order->refresh();
+    $reservation->refresh();
+
+    $stockLevel = $variant->stockLevel()->firstOrFail();
+
+    $this->assertSame('CANCELLED', $order->status);
+
+    $this->assertSame('EXPIRED', $reservation->status);
+    $this->assertNotNull($reservation->released_at);
+
+    $this->assertSame(10, $stockLevel->physical_quantity);
+    $this->assertSame(0, $stockLevel->reserved_quantity);
+    $this->assertSame(10, $stockLevel->availableQuantity());
+}
+
+public function test_pending_unpaid_order_cannot_expire_before_reservation_deadline(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Expiration Early',
+        'slug' => 'boutique-expiration-early',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $category = Category::create([
+        'name' => 'Téléphones',
+        'slug' => 'telephones-expiration-early',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Téléphone Expiration Early',
+        'slug' => 'telephone-expiration-early',
+        'status' => 'ACTIVE',
+    ]);
+
+    $variant = app(CreateProductVariant::class)->execute([
+        'product_id' => $product->id,
+        'sku' => 'EXPIRATION-EARLY-001',
+        'price' => '10000.00',
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    app(ReceiveStock::class)->execute(
+        productVariantId: $variant->id,
+        quantity: 10,
+        userId: $user->id,
+        reason: 'Stock initial'
+    );
+
+    $order = app(CreateOrder::class)->execute(
+        customerName: 'Jean Client',
+        customerPhone: '690 000 002',
+        customerEmail: null,
+        fulfillmentType: 'PICKUP',
+        items: [
+            [
+                'product_variant_id' => $variant->id,
+                'quantity' => 2,
+            ],
+        ],
+    );
+
+    $reservation = $variant->stockReservations()
+        ->where('reference_type', 'ORDER')
+        ->where('reference_id', $order->id)
+        ->firstOrFail();
+
+    $this->travel(29)->minutes();
+
+try {
+    app(ExpireOrder::class)->execute($order->id);
+
+    $this->fail(
+        'La commande ne devait pas pouvoir expirer avant son délai.'
+    );
+} catch (ValidationException $exception) {
+    $this->assertArrayHasKey(
+        'reservation_expires_at',
+        $exception->errors()
+    );
+}
+
+$order->refresh();
+$reservation->refresh();
+
+$stockLevel = $variant->stockLevel()->firstOrFail();
+
+$this->assertSame('PENDING', $order->status);
+$this->assertSame('UNPAID', $order->payment_status);
+
+$this->assertSame('ACTIVE', $reservation->status);
+$this->assertNull($reservation->released_at);
+
+$this->assertSame(10, $stockLevel->physical_quantity);
+$this->assertSame(2, $stockLevel->reserved_quantity);
+$this->assertSame(8, $stockLevel->availableQuantity());
+
+    
+}
+
+public function test_paid_order_cannot_expire(): void
+{
+    $store = Store::create([
+        'name' => 'Boutique Paid Expiration',
+        'slug' => 'boutique-paid-expiration',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    app(TenantContext::class)->setFromUser($user);
+
+    $customer = Customer::create([
+        'name' => 'Client Paid',
+        'phone' => '+237690000003',
+    ]);
+
+    $order = Order::create([
+        'customer_id' => $customer->id,
+        'order_number' => 'ZM-PAID-EXPIRATION',
+        'status' => 'PENDING',
+        'payment_status' => 'PAID',
+        'fulfillment_type' => 'PICKUP',
+        'customer_name' => 'Client Paid',
+        'customer_phone' => '+237690000003',
+        'subtotal' => '10000.00',
+        'discount_amount' => '0.00',
+        'delivery_fee' => '0.00',
+        'total' => '10000.00',
+        'reservation_expires_at' => now()->subMinute(),
+    ]);
+
+    try {
+        app(ExpireOrder::class)->execute($order->id);
+
+        $this->fail(
+            'Une commande payée ne devait pas pouvoir expirer.'
+        );
+    } catch (ValidationException $exception) {
+        $this->assertArrayHasKey(
+            'payment_status',
+            $exception->errors()
+        );
+    }
+
+    $order->refresh();
+
+    $this->assertSame('PENDING', $order->status);
+    $this->assertSame('PAID', $order->payment_status);
+}
+
+public function test_order_cannot_be_expired_from_another_store(): void
+{
+    $storeA = Store::create([
+        'name' => 'Boutique Expiration Alpha',
+        'slug' => 'boutique-expiration-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $storeB = Store::create([
+        'name' => 'Boutique Expiration Beta',
+        'slug' => 'boutique-expiration-beta',
+        'status' => 'ACTIVE',
+    ]);
+
+    $userA = User::factory()->create([
+        'store_id' => $storeA->id,
+    ]);
+
+    $userB = User::factory()->create([
+        'store_id' => $storeB->id,
+    ]);
+
+    // Création de la commande dans la boutique B.
+    app(TenantContext::class)->setFromUser($userB);
+
+    $customerB = Customer::create([
+        'name' => 'Client Beta',
+        'phone' => '+237690000004',
+    ]);
+
+    $orderB = Order::create([
+        'customer_id' => $customerB->id,
+        'order_number' => 'ZM-EXPIRE-STORE-B',
+        'status' => 'PENDING',
+        'payment_status' => 'UNPAID',
+        'fulfillment_type' => 'PICKUP',
+        'customer_name' => 'Client Beta',
+        'customer_phone' => '+237690000004',
+        'subtotal' => '10000.00',
+        'discount_amount' => '0.00',
+        'delivery_fee' => '0.00',
+        'total' => '10000.00',
+        'reservation_expires_at' => now()->subMinute(),
+    ]);
+
+    // On passe dans la boutique A.
+    app(TenantContext::class)->setFromUser($userA);
+
+    try {
+        app(ExpireOrder::class)->execute($orderB->id);
+
+        $this->fail(
+            'Une boutique ne devrait pas pouvoir faire expirer la commande d’une autre boutique.'
+        );
+    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $exception) {
+        $this->assertSame(
+            Order::class,
+            $exception->getModel()
+        );
+    }
+
+    // Vérification depuis la boutique propriétaire.
     app(TenantContext::class)->setFromUser($userB);
 
     $orderB->refresh();
