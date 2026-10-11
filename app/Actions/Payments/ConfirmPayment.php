@@ -231,13 +231,79 @@ class ConfirmPayment
 
             if ($newTotalPaid < $orderTotal) {
                 $order->payment_status = 'PARTIALLY_PAID';
+           
             } else {
+                // Récupérer les réservations actives
+                // associées à cette commande.
                 $reservations = StockReservation::query()
                     ->where('reference_type', 'ORDER')
                     ->where('reference_id', $order->id)
                     ->where('status', 'ACTIVE')
                     ->get();
 
+                // Interdire le paiement complet
+                // lorsqu'aucune réservation active n'existe.
+                if ($reservations->isEmpty()) {
+                    throw ValidationException::withMessages([
+                        'stock' =>
+                            'Impossible de confirmer le paiement : aucune réservation de stock active pour cette commande.',
+                    ]);
+                }
+
+                
+                // Récupérer les articles de la commande.
+                $orderItems = $order->items()
+                    ->get(['product_variant_id', 'quantity']);
+
+                if ($orderItems->isEmpty()) {
+                    throw ValidationException::withMessages([
+                        'stock' =>
+                            'Impossible de confirmer une commande sans articles.',
+                    ]);
+                }
+
+                // Calculer les quantités commandées
+                // pour chaque variante de produit.
+                $orderedQuantities = $orderItems
+                    ->groupBy('product_variant_id')
+                    ->map(
+                        fn ($items) => (int) $items->sum('quantity')
+                    );
+
+                // Calculer les quantités réellement réservées.
+                $reservedQuantities = $reservations
+                    ->groupBy('product_variant_id')
+                    ->map(
+                        fn ($items) => (int) $items->sum('quantity')
+                    );
+
+                // Vérifier que les variantes correspondent
+                // et que toutes les quantités sont exactes.
+                $invalidReservations =
+                    $orderedQuantities->count() !==
+                    $reservedQuantities->count()
+                    ||
+                    $orderedQuantities->contains(
+                        function ($quantity, $variantId) use (
+                            $reservedQuantities
+                        ) {
+                            return $quantity !==
+                                (int) $reservedQuantities->get(
+                                    $variantId,
+                                    0
+                                );
+                        }
+                    );
+
+                if ($invalidReservations) {
+                    throw ValidationException::withMessages([
+                        'stock' =>
+                            'Les réservations de stock ne correspondent pas aux produits et quantités de la commande.',
+                    ]);
+                }
+
+
+                // Convertir les réservations en ventes.
                 foreach ($reservations as $reservation) {
                     $this->convertStockReservation->execute(
                         $reservation->id,
@@ -245,8 +311,10 @@ class ConfirmPayment
                     );
                 }
 
+                // La commande devient entièrement payée.
                 $order->payment_status = 'PAID';
             }
+
 
             $order->save();
 
