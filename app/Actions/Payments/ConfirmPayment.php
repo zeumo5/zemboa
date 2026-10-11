@@ -16,9 +16,12 @@ use Illuminate\Validation\ValidationException;
 
 class ConfirmPayment
 {
+
     public function __construct(
-        private ConvertStockReservation $convertStockReservation
+        private ConvertStockReservation $convertStockReservation,
+        private FinalizeOrderPayment $finalizeOrderPayment
     ) {}
+
 
     public function execute(
         int $paymentId,
@@ -125,22 +128,9 @@ class ConfirmPayment
 
 
 
-            $amountToCents = static function (string $amount): int {
-                if (!preg_match('/^\d+(\.\d{1,2})?$/', $amount)) {
-                    throw ValidationException::withMessages([
-                        'amount' => 'Montant invalide.',
-                    ]);
-                }
 
-                [$whole, $decimal] = array_pad(
-                    explode('.', $amount, 2),
-                    2,
-                    '0'
-                );
-
-                return ((int) $whole * 100)
-                    + (int) str_pad($decimal, 2, '0');
-            };
+            $amountToCents = fn(string $amount): int =>
+            $this->finalizeOrderPayment->amountToCents($amount);
 
             $paymentAmount = $amountToCents($payment->amount);
             $orderTotal = $amountToCents($order->total);
@@ -161,13 +151,19 @@ class ConfirmPayment
                 fn(Payment $item) => $amountToCents($item->amount)
             );
 
-            $newTotalPaid = $alreadyPaid + $paymentAmount;
 
-            if ($newTotalPaid > $orderTotal) {
-                throw ValidationException::withMessages([
-                    'amount' => 'Le paiement dépasse le solde de la commande.',
-                ]);
-            }
+            $alreadyPaidDecimal = sprintf(
+                '%d.%02d',
+                intdiv($alreadyPaid, 100),
+                $alreadyPaid % 100
+            );
+
+            $newTotalPaid = $this->finalizeOrderPayment->validatePaymentTotal(
+                orderTotal: (string) $order->total,
+                alreadyPaid: $alreadyPaidDecimal,
+                newPayment: (string) $payment->amount
+            );
+
 
 
             // Si la commande reste partiellement payée,
