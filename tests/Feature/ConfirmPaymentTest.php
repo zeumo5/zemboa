@@ -951,4 +951,114 @@ public function test_second_partial_payment_keeps_original_balance_due_date(): v
 }
 
 
+public function test_two_payments_cannot_exceed_order_total(): void
+{
+    // Créer la boutique et un caissier autorisé.
+    $store = Store::create([
+        'name' => 'Boutique Alpha',
+        'slug' => 'boutique-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $this->authenticatePaymentCashier($user);
+
+    $customer = \App\Models\Customer::create([
+        'name' => 'Jean Client',
+        'phone' => '+237690000001',
+    ]);
+
+    // Commande de 10 000 FCFA.
+    $order = \App\Models\Order::create([
+        'customer_id' => $customer->id,
+        'order_number' => 'ZM-MULTI-PAY-001',
+        'fulfillment_type' => 'PICKUP',
+        'customer_name' => 'Jean Client',
+        'customer_phone' => '+237690000001',
+        'subtotal' => '10000.00',
+        'total' => '10000.00',
+    ]);
+
+    // Premier paiement : 7 000 FCFA.
+    $paymentA = Payment::create([
+        'order_id' => $order->id,
+        'amount' => '7000.00',
+        'method' => 'CASH',
+        'status' => 'PENDING',
+        'cash_received' => '7000.00',
+        'change_given' => '0.00',
+    ]);
+
+    app(ConfirmPayment::class)->execute(
+        paymentId: $paymentA->id,
+        userId: $user->id,
+        balanceDueAt: now()->addDays(3)->format('Y-m-d H:i:s')
+    );
+
+    $this->assertSame('CONFIRMED', $paymentA->fresh()->status);
+    $this->assertSame(
+        'PARTIALLY_PAID',
+        $order->fresh()->payment_status
+    );
+
+    // Deuxième paiement : 5 000 FCFA.
+    // Il dépasserait le total de 2 000 FCFA.
+    $paymentB = Payment::create([
+        'order_id' => $order->id,
+        'amount' => '5000.00',
+        'method' => 'CASH',
+        'status' => 'PENDING',
+        'cash_received' => '5000.00',
+        'change_given' => '0.00',
+    ]);
+
+    try {
+        app(ConfirmPayment::class)->execute(
+            paymentId: $paymentB->id,
+            userId: $user->id
+        );
+
+        $this->fail(
+            'Le total des paiements ne doit pas dépasser la commande.'
+        );
+    } catch (
+        \Illuminate\Validation\ValidationException $exception
+    ) {
+        $this->assertArrayHasKey(
+            'amount',
+            $exception->errors()
+        );
+    }
+
+    // Le deuxième paiement n'a pas été confirmé.
+    $this->assertSame('PENDING', $paymentB->fresh()->status);
+    $this->assertNull($paymentB->fresh()->confirmed_at);
+
+    // La commande conserve son statut.
+    $this->assertSame(
+        'PARTIALLY_PAID',
+        $order->fresh()->payment_status
+    );
+
+    // Seul le premier paiement compte.
+    $this->assertSame(
+        1,
+        $order->payments()
+            ->where('status', 'CONFIRMED')
+            ->count()
+    );
+
+    $this->assertEquals(
+        7000,
+        $order->payments()
+            ->where('status', 'CONFIRMED')
+            ->sum('amount')
+    );
+}
+
+
+
 }

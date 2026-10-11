@@ -154,6 +154,7 @@ class ConfirmPayment
             $confirmedPayments = Payment::query()
                 ->where('order_id', $order->id)
                 ->where('status', 'CONFIRMED')
+                ->lockForUpdate()
                 ->get(['amount']);
 
             $alreadyPaid = $confirmedPayments->sum(
@@ -168,7 +169,7 @@ class ConfirmPayment
                 ]);
             }
 
-            
+
             // Si la commande reste partiellement payée,
             // elle doit posséder une date limite future
             // pour le paiement du solde.
@@ -188,11 +189,11 @@ class ConfirmPayment
                         ],
                         [
                             'balance_due_at.required' =>
-                                'La date limite du solde est obligatoire.',
+                            'La date limite du solde est obligatoire.',
                             'balance_due_at.date_format' =>
-                                'Le format attendu est AAAA-MM-JJ HH:MM:SS.',
+                            'Le format attendu est AAAA-MM-JJ HH:MM:SS.',
                             'balance_due_at.after' =>
-                                'La date limite doit être dans le futur.',
+                            'La date limite doit être dans le futur.',
                         ]
                     )->validate();
 
@@ -200,7 +201,7 @@ class ConfirmPayment
                 } elseif ($balanceDueAt !== null) {
                     throw ValidationException::withMessages([
                         'balance_due_at' =>
-                            'La date limite existe déjà. Sa modification nécessite une opération distincte.',
+                        'La date limite existe déjà. Sa modification nécessite une opération distincte.',
                     ]);
                 }
             }
@@ -231,7 +232,6 @@ class ConfirmPayment
 
             if ($newTotalPaid < $orderTotal) {
                 $order->payment_status = 'PARTIALLY_PAID';
-           
             } else {
                 // Récupérer les réservations actives
                 // associées à cette commande.
@@ -246,11 +246,11 @@ class ConfirmPayment
                 if ($reservations->isEmpty()) {
                     throw ValidationException::withMessages([
                         'stock' =>
-                            'Impossible de confirmer le paiement : aucune réservation de stock active pour cette commande.',
+                        'Impossible de confirmer le paiement : aucune réservation de stock active pour cette commande.',
                     ]);
                 }
 
-                
+
                 // Récupérer les articles de la commande.
                 $orderItems = $order->items()
                     ->get(['product_variant_id', 'quantity']);
@@ -258,7 +258,7 @@ class ConfirmPayment
                 if ($orderItems->isEmpty()) {
                     throw ValidationException::withMessages([
                         'stock' =>
-                            'Impossible de confirmer une commande sans articles.',
+                        'Impossible de confirmer une commande sans articles.',
                     ]);
                 }
 
@@ -267,14 +267,14 @@ class ConfirmPayment
                 $orderedQuantities = $orderItems
                     ->groupBy('product_variant_id')
                     ->map(
-                        fn ($items) => (int) $items->sum('quantity')
+                        fn($items) => (int) $items->sum('quantity')
                     );
 
                 // Calculer les quantités réellement réservées.
                 $reservedQuantities = $reservations
                     ->groupBy('product_variant_id')
                     ->map(
-                        fn ($items) => (int) $items->sum('quantity')
+                        fn($items) => (int) $items->sum('quantity')
                     );
 
                 // Vérifier que les variantes correspondent
@@ -298,7 +298,7 @@ class ConfirmPayment
                 if ($invalidReservations) {
                     throw ValidationException::withMessages([
                         'stock' =>
-                            'Les réservations de stock ne correspondent pas aux produits et quantités de la commande.',
+                        'Les réservations de stock ne correspondent pas aux produits et quantités de la commande.',
                     ]);
                 }
 
