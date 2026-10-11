@@ -273,31 +273,10 @@ class ConfirmPayment
                         fn($items) => (int) $items->sum('quantity')
                     );
 
-                // Vérifier que les variantes correspondent
-                // et que toutes les quantités sont exactes.
-                $invalidReservations =
-                    $orderedQuantities->count() !==
-                    $reservedQuantities->count()
-                    ||
-                    $orderedQuantities->contains(
-                        function ($quantity, $variantId) use (
-                            $reservedQuantities
-                        ) {
-                            return $quantity !==
-                                (int) $reservedQuantities->get(
-                                    $variantId,
-                                    0
-                                );
-                        }
-                    );
-
-                if ($invalidReservations) {
-                    throw ValidationException::withMessages([
-                        'stock' =>
-                        'Les réservations de stock ne correspondent pas aux produits et quantités de la commande.',
-                    ]);
-                }
-
+                // Vérifier que les réservations actives
+                // correspondent exactement à la commande.
+                $this->finalizeOrderPayment
+                    ->validateStockReservations($order);
 
                 // Convertir les réservations en ventes.
                 foreach ($reservations as $reservation) {
