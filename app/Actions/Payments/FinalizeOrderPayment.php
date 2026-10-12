@@ -2,6 +2,10 @@
 
 namespace App\Actions\Payments;
 
+use App\Models\Payment;
+use App\Actions\Stock\ConvertStockReservation;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Eloquent\Collection;
 use App\Models\Order;
 use App\Models\StockReservation;
 use Illuminate\Validation\ValidationException;
@@ -91,7 +95,7 @@ final class FinalizeOrderPayment
      * Cette méthode doit être appelée dans une transaction
      * après verrouillage de la commande.
      */
-    public function validateStockReservations(Order $order): void
+    public function validateStockReservations(Order $order): Collection
     {
         // 1. Récupérer les réservations actives.
 
@@ -153,7 +157,135 @@ final class FinalizeOrderPayment
                 'Les réservations ne correspondent pas aux produits et quantités de la commande.',
             ]);
         }
+        // Retourner les réservations actives validées.
+        return $reservations;
     }
+
+    
+/**
+ * Convertir les réservations validées en ventes.
+ *
+ * À appeler uniquement depuis une transaction
+ * dans laquelle la commande est déjà verrouillée.
+ */
+public function convertReservedStock(
+    Order $order,
+    ConvertStockReservation $converter,
+    ?int $userId = null
+): void {
+    // Empêcher la conversion hors transaction.
+    if (DB::transactionLevel() === 0) {
+        throw new LogicException(
+            'La conversion du stock nécessite une transaction.'
+        );
+    }
+
+    // Vérifier les quantités et verrouiller
+    // les réservations actives.
+    $reservations = $this->validateStockReservations($order);
+
+    // Convertir chaque réservation en vente.
+    foreach ($reservations as $reservation) {
+        $converter->execute(
+            $reservation->id,
+            $userId
+        );
+    }
+}
+
+
+/**
+ * Finaliser un paiement CASH déjà contrôlé.
+ *
+ * Cette méthode doit être appelée dans une transaction,
+ * après verrouillage de la commande et du paiement,
+ * et après vérification du caissier et du solde.
+ *
+ * Mobile Money reste interdit ici.
+ */
+public function completeLockedCashPayment(
+    Order $order,
+    Payment $payment,
+    int $newTotalPaid,
+    ConvertStockReservation $converter,
+    int $userId
+): Payment {
+    // 1. Une transaction active est obligatoire.
+    if (DB::transactionLevel() === 0) {
+        throw new LogicException(
+            'La confirmation nécessite une transaction.'
+        );
+    }
+
+    // 2. Vérifier la cohérence du paiement.
+    if (
+        (int) $payment->order_id !== (int) $order->id ||
+        (int) $payment->store_id !== (int) $order->store_id
+    ) {
+        throw ValidationException::withMessages([
+            'payment' => 'Paiement et commande incompatibles.',
+        ]);
+    }
+
+    // 3. Ne jamais utiliser cette méthode pour Mobile Money.
+    if ($payment->method !== 'CASH') {
+        throw ValidationException::withMessages([
+            'method' => 'Seuls les paiements CASH sont autorisés.',
+        ]);
+    }
+
+    // 4. Vérifier les statuts.
+    if (
+        $payment->status !== 'PENDING' ||
+        $order->status !== 'PENDING' ||
+        !in_array($order->payment_status, [
+            'UNPAID',
+            'PARTIALLY_PAID',
+        ], true)
+    ) {
+        throw ValidationException::withMessages([
+            'status' => 'Paiement ou commande déjà traité.',
+        ]);
+    }
+
+    // 5. Vérifier le montant total.
+    $orderTotal = $this->amountToCents(
+        (string) $order->total
+    );
+
+    if (
+        $newTotalPaid <= 0 ||
+        $newTotalPaid > $orderTotal
+    ) {
+        throw ValidationException::withMessages([
+            'amount' => 'Montant total payé invalide.',
+        ]);
+    }
+
+    // 6. Confirmer le paiement CASH.
+    $payment->status = 'CONFIRMED';
+    $payment->confirmed_at = now();
+    $payment->received_by = $userId;
+    $payment->save();
+
+    // 7. Mettre à jour la commande.
+    if ($newTotalPaid < $orderTotal) {
+        $order->payment_status = 'PARTIALLY_PAID';
+    } else {
+        // Vérifier et convertir le stock en ventes.
+        $this->convertReservedStock(
+            order: $order,
+            converter: $converter,
+            userId: $userId
+        );
+
+        $order->payment_status = 'PAID';
+    }
+
+    $order->save();
+
+    return $payment->refresh();
+}
 
 
     public function execute(): never

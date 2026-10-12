@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 
-
+use App\Models\StorePaymentAccount;
 use App\Models\Store;
 use App\Models\User;
 use App\Models\Customer;
@@ -62,6 +62,8 @@ class InitiateMobileMoneyPaymentTest extends TestCase
         $this->actingAs($user);
 
         app(TenantContext::class)->setFromUser($user);
+
+        $this->activateTestMerchantAccount('MTN_MOMO');
 
         // 3. Créer un client.
         $customer = Customer::create([
@@ -133,6 +135,8 @@ public function test_duplicate_pending_mobile_money_payment_is_rejected(): void
 
     $this->actingAs($user);
     app(TenantContext::class)->setFromUser($user);
+
+    $this->activateTestMerchantAccount('MTN_MOMO');
 
     // 3. Créer un client.
     $customer = Customer::create([
@@ -212,6 +216,8 @@ public function test_orange_money_payment_is_created_as_pending(): void
     $this->actingAs($user);
     app(TenantContext::class)->setFromUser($user);
 
+    $this->activateTestMerchantAccount('ORANGE_MONEY');
+
     // 3. Créer le client.
     $customer = Customer::create([
         'name' => 'Client Orange Money',
@@ -279,6 +285,8 @@ public function test_failed_mobile_money_payment_allows_retry(): void
 
     $this->actingAs($user);
     app(TenantContext::class)->setFromUser($user);
+
+    $this->activateTestMerchantAccount('MTN_MOMO');
 
     // 2. Créer un client.
     $customer = Customer::create([
@@ -359,6 +367,8 @@ public function test_cancelled_mobile_money_payment_allows_retry(): void
     $this->actingAs($user);
     app(TenantContext::class)->setFromUser($user);
 
+    $this->activateTestMerchantAccount('ORANGE_MONEY');
+
     // 2. Créer un client.
     $customer = Customer::create([
         'name' => 'Client Retry MoMo',
@@ -420,6 +430,97 @@ public function test_cancelled_mobile_money_payment_allows_retry(): void
     'CANCELLED',
     $firstPayment->fresh()->status
 );
+}
+
+
+private function activateTestMerchantAccount(string $method): void
+{
+    // Créer un compte pour la boutique active.
+    $storeId = app(TenantContext::class)->storeId();
+
+    $account = StorePaymentAccount::create([
+        'method' => $method,
+        'gateway' => 'TEST_GATEWAY',
+        'merchant_account_id' =>
+            'TEST-MERCHANT-' . $storeId . '-' . $method,
+    ]);
+
+    // Simuler une activation uniquement pendant les tests.
+    $account->forceFill([
+        'status' => 'ACTIVE',
+        'verified_at' => now(),
+    ])->save();
+}
+
+
+public function test_unverified_merchant_account_rolls_back_payment_creation(): void
+{
+    // Créer une boutique et son utilisateur.
+    $store = Store::create([
+        'name' => 'Boutique Rollback',
+        'slug' => 'boutique-rollback-momo',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $this->actingAs($user);
+    app(TenantContext::class)->setFromUser($user);
+
+    // Compte marchand non vérifié.
+    StorePaymentAccount::create([
+        'method' => 'MTN_MOMO',
+        'gateway' => 'TEST_GATEWAY',
+        'merchant_account_id' => 'ROLLBACK-MERCHANT-001',
+    ]);
+
+    $customer = Customer::create([
+        'name' => 'Client Rollback',
+        'phone' => '+237690000099',
+    ]);
+
+    $order = Order::create([
+        'customer_id' => $customer->id,
+        'order_number' => 'ZM-ROLLBACK-001',
+        'fulfillment_type' => 'PICKUP',
+        'customer_name' => 'Client Rollback',
+        'customer_phone' => '+237690000099',
+        'subtotal' => '10000.00',
+        'total' => '10000.00',
+    ]);
+
+    // Tenter une initiation avec un compte non vérifié.
+    try {
+        app(InitiateMobileMoneyPayment::class)->execute(
+            orderId: $order->id,
+            method: 'MTN_MOMO'
+        );
+
+        $this->fail(
+            'Un compte non vérifié aurait dû être refusé.'
+        );
+    } catch (\Illuminate\Validation\ValidationException $exception) {
+        $this->assertArrayHasKey(
+            'merchant_account',
+            $exception->errors()
+        );
+    }
+
+    // Aucun paiement incomplet ne doit être conservé.
+    $this->assertSame(
+        0,
+        Payment::query()
+            ->where('order_id', $order->id)
+            ->count()
+    );
+
+    // La commande reste impayée.
+    $this->assertSame(
+        'UNPAID',
+        $order->fresh()->payment_status
+    );
 }
 
 

@@ -1,7 +1,8 @@
 <?php
+
 namespace Tests\Feature;
 
-
+use App\Models\StorePaymentAccount;
 use App\Actions\Payments\ProcessMobileMoneyPayment;
 use App\Actions\Payments\VerifyMobileMoneyPayment;
 use App\Models\Customer;
@@ -116,7 +117,7 @@ class ProcessMobileMoneyPaymentTest extends TestCase
         );
     }
 
-    public function test_failed_mobile_money_result_does_not_change_database_yet(): void
+    public function test_failed_mobile_money_result_marks_payment_failed(): void
     {
         // 1. Créer une boutique.
         $store = Store::create([
@@ -190,8 +191,9 @@ class ProcessMobileMoneyPaymentTest extends TestCase
         );
 
         // 10. Vérifier qu'aucune confirmation n'a eu lieu.
+
         $this->assertSame(
-            'PENDING',
+            'FAILED',
             $payment->fresh()->status
         );
 
@@ -211,12 +213,21 @@ class ProcessMobileMoneyPaymentTest extends TestCase
                 ->where('order_id', $order->id)
                 ->count()
         );
+
+
+        // Un paiement déjà FAILED ne doit pas
+        // pouvoir être traité une deuxième fois.
+        $this->expectException(
+            \Illuminate\Validation\ValidationException::class
+        );
+
+        $processor->execute($payment->id);
     }
 
-     public function test_success_mobile_money_confirmation_remains_disabled(): void
-{
+    public function test_success_mobile_money_confirmation_remains_disabled(): void
+    {
 
-      // 1. Créer une boutique.
+        // 1. Créer une boutique.
         $store = Store::create([
             'name' => 'Boutique Test Process MoMo',
             'slug' => 'boutique-process-momo',
@@ -258,6 +269,24 @@ class ProcessMobileMoneyPaymentTest extends TestCase
             'reference' => 'ZM-PROCESS-MOMO-001',
         ]);
 
+
+        $account = StorePaymentAccount::create([
+            'method' => 'MTN_MOMO',
+            'gateway' => 'TEST_GATEWAY',
+            'merchant_account_id' => 'MERCHANT-PROCESS-SUCCESS-001',
+        ]);
+
+        // Activation fictive réservée au test.
+        $account->forceFill([
+            'status' => 'ACTIVE',
+            'verified_at' => now(),
+        ])->save();
+
+        // Associer le compte bénéficiaire au paiement.
+        $payment->store_payment_account_id = $account->id;
+        $payment->save();
+
+
         // 6. Simuler un paiement toujours en attente.
         $fakeResult = new MobileMoneyVerificationResult(
             status: 'SUCCESS',
@@ -265,7 +294,8 @@ class ProcessMobileMoneyPaymentTest extends TestCase
             amount: '10000.00',
             currency: 'XAF',
             provider: 'MTN_MOMO',
-            providerTransactionId: 'FAKE-MTN-SUCCESS-001'
+            providerTransactionId: 'FAKE-MTN-SUCCESS-001',
+            recipientMerchantAccountId: 'MERCHANT-PROCESS-SUCCESS-001'
         );
 
         $verifier = new FakeMobileMoneyVerifier($fakeResult);
@@ -277,21 +307,20 @@ class ProcessMobileMoneyPaymentTest extends TestCase
         );
 
         // 8. Traiter la réponse simulée.
-        
-try {
-    $processor->execute($payment->id);
 
-    $this->fail(
-        'Une confirmation SUCCESS aurait dû être bloquée.'
-    );
+        try {
+            $processor->execute($payment->id);
 
-} catch (\LogicException $exception) {
-    $this->assertSame(
-        'Confirmation Mobile Money non encore activée.',
-        $exception->getMessage()
-    );
-}
-  // 10. Vérifier qu'aucune confirmation n'a eu lieu.
+            $this->fail(
+                'Une confirmation SUCCESS aurait dû être bloquée.'
+            );
+        } catch (\LogicException $exception) {
+            $this->assertSame(
+                'Confirmation Mobile Money non encore activée.',
+                $exception->getMessage()
+            );
+        }
+        // 10. Vérifier qu'aucune confirmation n'a eu lieu.
         $this->assertSame(
             'PENDING',
             $payment->fresh()->status
@@ -315,9 +344,3 @@ try {
         );
     }
 }
-
-
-
-
-
-

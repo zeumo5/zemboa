@@ -1,7 +1,7 @@
 <?php
 namespace App\Actions\Payments;
 
-
+use App\Models\StorePaymentAccount;
 use App\Models\Payment;
 use App\Payments\MobileMoneyVerifier;
 use App\Payments\MobileMoneyVerificationResult;
@@ -101,6 +101,46 @@ class VerifyMobileMoneyPayment
                     'Identifiant de transaction manquant.',
             ]);
         }
+
+        
+        // 12. Vérifier le bénéficiaire d'un paiement SUCCESS.
+        if ($result->status === 'SUCCESS') {
+
+            // Retrouver le compte marchand lié au paiement.
+            $account = StorePaymentAccount::query()
+                ->whereKey($payment->store_payment_account_id)
+                ->where('store_id', $payment->store_id)
+                ->where('method', $payment->method)
+                ->where('status', 'ACTIVE')
+                ->whereNotNull('verified_at')
+                ->first();
+
+            if (
+                $account === null ||
+                empty($account->merchant_account_id)
+            ) {
+                throw ValidationException::withMessages([
+                    'merchant_account' =>
+                        'Aucun compte marchand vérifié pour ce paiement.',
+                ]);
+            }
+
+            // Le vérificateur doit retourner le véritable
+            // bénéficiaire déclaré par le prestataire.
+            if (
+                empty($result->recipientMerchantAccountId) ||
+                !hash_equals(
+                    (string) $account->merchant_account_id,
+                    $result->recipientMerchantAccountId
+                )
+            ) {
+                throw ValidationException::withMessages([
+                    'merchant_account' =>
+                        'Le bénéficiaire du paiement est incorrect.',
+                ]);
+            }
+        }
+
 
         // 12. Retourner le résultat vérifié.
         // Aucun paiement n'est confirmé ici.

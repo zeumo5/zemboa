@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Actions\Payments;
 
 
@@ -41,6 +42,7 @@ class InitiateMobileMoneyPayment
             $method,
             $storeId
         ) {
+
             // Verrouiller la commande avant toute vérification.
             $order = Order::query()
                 ->where('store_id', $storeId)
@@ -60,7 +62,7 @@ class InitiateMobileMoneyPayment
             ], true)) {
                 throw ValidationException::withMessages([
                     'payment_status' =>
-                        'Cette commande est déjà entièrement payée.',
+                    'Cette commande est déjà entièrement payée.',
                 ]);
             }
 
@@ -77,7 +79,7 @@ class InitiateMobileMoneyPayment
             if ($payments->contains('status', 'PENDING')) {
                 throw ValidationException::withMessages([
                     'payment' =>
-                        'Un paiement est déjà en attente pour cette commande.',
+                    'Un paiement est déjà en attente pour cette commande.',
                 ]);
             }
 
@@ -108,7 +110,7 @@ class InitiateMobileMoneyPayment
             $alreadyPaid = $payments
                 ->where('status', 'CONFIRMED')
                 ->sum(
-                    fn ($payment) => $toCents($payment->amount)
+                    fn($payment) => $toCents($payment->amount)
                 );
 
             $remaining = $total - $alreadyPaid;
@@ -130,13 +132,27 @@ class InitiateMobileMoneyPayment
 
             // Création interne seulement.
             // Aucune requête au prestataire n'est envoyée ici.
-            return Payment::create([
+
+            // 1. Créer le paiement en attente.
+            $payment = Payment::create([
                 'order_id' => $order->id,
                 'amount' => $amount,
                 'method' => $method,
                 'status' => 'PENDING',
                 'reference' => (string) Str::uuid(),
             ]);
+
+            // 2. Associer automatiquement le compte marchand
+            // vérifié de la boutique.
+            // Si aucun compte valide n'existe,
+            // toute la transaction sera annulée.
+            return $this->assignMerchantAccount
+                ->execute($payment->id);
         }, 3);
     }
+
+
+    public function __construct(
+        private readonly AssignMerchantAccountToPayment $assignMerchantAccount
+    ) {}
 }

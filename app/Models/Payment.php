@@ -50,4 +50,16 @@ class Payment extends Model
             'confirmed_at' => 'datetime',
         ];
     }
+
+
+    /**
+     * Compte marchand bénéficiaire du paiement Mobile Money.
+     */
+    public function storePaymentAccount(): BelongsTo
+    {
+        return $this->belongsTo(
+            StorePaymentAccount::class,
+            'store_payment_account_id'
+        );
+    }
 }
