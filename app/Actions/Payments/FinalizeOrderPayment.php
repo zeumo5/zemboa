@@ -161,131 +161,264 @@ final class FinalizeOrderPayment
         return $reservations;
     }
 
-    
-/**
- * Convertir les réservations validées en ventes.
- *
- * À appeler uniquement depuis une transaction
- * dans laquelle la commande est déjà verrouillée.
- */
-public function convertReservedStock(
-    Order $order,
-    ConvertStockReservation $converter,
-    ?int $userId = null
-): void {
-    // Empêcher la conversion hors transaction.
-    if (DB::transactionLevel() === 0) {
-        throw new LogicException(
-            'La conversion du stock nécessite une transaction.'
+
+    /**
+     * Convertir les réservations validées en ventes.
+     *
+     * À appeler uniquement depuis une transaction
+     * dans laquelle la commande est déjà verrouillée.
+     */
+    public function convertReservedStock(
+        Order $order,
+        ConvertStockReservation $converter,
+        ?int $userId = null
+    ): void {
+        // Empêcher la conversion hors transaction.
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException(
+                'La conversion du stock nécessite une transaction.'
+            );
+        }
+
+        // Vérifier les quantités et verrouiller
+        // les réservations actives.
+        $reservations = $this->validateStockReservations($order);
+
+        // Convertir chaque réservation en vente.
+        foreach ($reservations as $reservation) {
+            $converter->execute(
+                $reservation->id,
+                $userId
+            );
+        }
+    }
+
+
+    /**
+     * Finaliser un paiement CASH déjà contrôlé.
+     *
+     * Cette méthode doit être appelée dans une transaction,
+     * après verrouillage de la commande et du paiement,
+     * et après vérification du caissier et du solde.
+     *
+     * Mobile Money reste interdit ici.
+     */
+    public function completeLockedCashPayment(
+        Order $order,
+        Payment $payment,
+        int $newTotalPaid,
+        ConvertStockReservation $converter,
+        int $userId
+    ): Payment {
+        // 1. Une transaction active est obligatoire.
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException(
+                'La confirmation nécessite une transaction.'
+            );
+        }
+
+        // 2. Vérifier la cohérence du paiement.
+        if (
+            (int) $payment->order_id !== (int) $order->id ||
+            (int) $payment->store_id !== (int) $order->store_id
+        ) {
+            throw ValidationException::withMessages([
+                'payment' => 'Paiement et commande incompatibles.',
+            ]);
+        }
+
+        // 3. Ne jamais utiliser cette méthode pour Mobile Money.
+        if ($payment->method !== 'CASH') {
+            throw ValidationException::withMessages([
+                'method' => 'Seuls les paiements CASH sont autorisés.',
+            ]);
+        }
+
+        // 4. Vérifier les statuts.
+        if (
+            $payment->status !== 'PENDING' ||
+            $order->status !== 'PENDING' ||
+            !in_array($order->payment_status, [
+                'UNPAID',
+                'PARTIALLY_PAID',
+            ], true)
+        ) {
+            throw ValidationException::withMessages([
+                'status' => 'Paiement ou commande déjà traité.',
+            ]);
+        }
+
+        // 5. Vérifier le montant total.
+        $orderTotal = $this->amountToCents(
+            (string) $order->total
         );
-    }
 
-    // Vérifier les quantités et verrouiller
-    // les réservations actives.
-    $reservations = $this->validateStockReservations($order);
+        if (
+            $newTotalPaid <= 0 ||
+            $newTotalPaid > $orderTotal
+        ) {
+            throw ValidationException::withMessages([
+                'amount' => 'Montant total payé invalide.',
+            ]);
+        }
 
-    // Convertir chaque réservation en vente.
-    foreach ($reservations as $reservation) {
-        $converter->execute(
-            $reservation->id,
-            $userId
-        );
-    }
-}
+        // 6. Confirmer le paiement CASH.
+        $payment->status = 'CONFIRMED';
+        $payment->confirmed_at = now();
+        $payment->received_by = $userId;
+        $payment->save();
 
 
-/**
- * Finaliser un paiement CASH déjà contrôlé.
- *
- * Cette méthode doit être appelée dans une transaction,
- * après verrouillage de la commande et du paiement,
- * et après vérification du caissier et du solde.
- *
- * Mobile Money reste interdit ici.
- */
-public function completeLockedCashPayment(
-    Order $order,
-    Payment $payment,
-    int $newTotalPaid,
-    ConvertStockReservation $converter,
-    int $userId
-): Payment {
-    // 1. Une transaction active est obligatoire.
-    if (DB::transactionLevel() === 0) {
-        throw new LogicException(
-            'La confirmation nécessite une transaction.'
-        );
-    }
-
-    // 2. Vérifier la cohérence du paiement.
-    if (
-        (int) $payment->order_id !== (int) $order->id ||
-        (int) $payment->store_id !== (int) $order->store_id
-    ) {
-        throw ValidationException::withMessages([
-            'payment' => 'Paiement et commande incompatibles.',
-        ]);
-    }
-
-    // 3. Ne jamais utiliser cette méthode pour Mobile Money.
-    if ($payment->method !== 'CASH') {
-        throw ValidationException::withMessages([
-            'method' => 'Seuls les paiements CASH sont autorisés.',
-        ]);
-    }
-
-    // 4. Vérifier les statuts.
-    if (
-        $payment->status !== 'PENDING' ||
-        $order->status !== 'PENDING' ||
-        !in_array($order->payment_status, [
-            'UNPAID',
-            'PARTIALLY_PAID',
-        ], true)
-    ) {
-        throw ValidationException::withMessages([
-            'status' => 'Paiement ou commande déjà traité.',
-        ]);
-    }
-
-    // 5. Vérifier le montant total.
-    $orderTotal = $this->amountToCents(
-        (string) $order->total
-    );
-
-    if (
-        $newTotalPaid <= 0 ||
-        $newTotalPaid > $orderTotal
-    ) {
-        throw ValidationException::withMessages([
-            'amount' => 'Montant total payé invalide.',
-        ]);
-    }
-
-    // 6. Confirmer le paiement CASH.
-    $payment->status = 'CONFIRMED';
-    $payment->confirmed_at = now();
-    $payment->received_by = $userId;
-    $payment->save();
-
-    // 7. Mettre à jour la commande.
-    if ($newTotalPaid < $orderTotal) {
-        $order->payment_status = 'PARTIALLY_PAID';
-    } else {
-        // Vérifier et convertir le stock en ventes.
-        $this->convertReservedStock(
+        // 7. Appliquer la finalisation commune.
+        $this->applyLockedOrderPaymentState(
             order: $order,
+            newTotalPaid: $newTotalPaid,
             converter: $converter,
             userId: $userId
         );
 
-        $order->payment_status = 'PAID';
+        return $payment->refresh();
     }
 
-    $order->save();
 
-    return $payment->refresh();
-}
+    /**
+     * Calculer le nouveau total payé pour un paiement
+     * Mobile Money, sans modifier la base de données.
+     *
+     * À appeler dans une transaction SQL après
+     * verrouillage de la commande et du paiement.
+     */
+    public function calculateLockedMobileMoneyTotal(
+        Order $order,
+        Payment $payment
+    ): int {
+        // 1. Exiger une transaction active.
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException(
+                'Le calcul nécessite une transaction SQL.'
+            );
+        }
+
+        // 2. Vérifier la boutique et la commande.
+        if (
+            (int) $payment->order_id !== (int) $order->id ||
+            (int) $payment->store_id !== (int) $order->store_id
+        ) {
+            throw ValidationException::withMessages([
+                'payment' => 'Paiement et commande incompatibles.',
+            ]);
+        }
+
+        // 3. Accepter uniquement Mobile Money en attente.
+        if (
+            !in_array($payment->method, [
+                'MTN_MOMO',
+                'ORANGE_MONEY',
+            ], true) ||
+            $payment->status !== 'PENDING' ||
+            $order->status !== 'PENDING' ||
+            !in_array($order->payment_status, [
+                'UNPAID',
+                'PARTIALLY_PAID',
+            ], true)
+        ) {
+            throw ValidationException::withMessages([
+                'payment' => 'Paiement Mobile Money non confirmable.',
+            ]);
+        }
+
+        // 4. Récupérer les paiements déjà confirmés.
+        $confirmedPayments = Payment::query()
+            ->where('order_id', $order->id)
+            ->where('status', 'CONFIRMED')
+            ->lockForUpdate()
+            ->get(['amount']);
+
+        // 5. Additionner sans utiliser de float.
+        $alreadyPaidCents = 0;
+
+        foreach ($confirmedPayments as $confirmedPayment) {
+            $alreadyPaidCents += $this->amountToCents(
+                (string) $confirmedPayment->amount
+            );
+        }
+
+        // 6. Vérifier le total et le nouveau paiement.
+        $orderTotalCents = $this->amountToCents(
+            (string) $order->total
+        );
+
+        $newPaymentCents = $this->amountToCents(
+            (string) $payment->amount
+        );
+
+        if (
+            $orderTotalCents <= 0 ||
+            $newPaymentCents <= 0 ||
+            $alreadyPaidCents > $orderTotalCents ||
+            $newPaymentCents >
+            $orderTotalCents - $alreadyPaidCents
+        ) {
+            throw ValidationException::withMessages([
+                'amount' =>
+                'Le paiement dépasse le solde disponible.',
+            ]);
+        }
+
+        // 7. Retourner le nouveau montant total en centimes.
+        return $alreadyPaidCents + $newPaymentCents;
+    }
+
+
+    /**
+     * Finaliser l'état d'une commande après un paiement
+     * déjà contrôlé et enregistré.
+     *
+     * Méthode privée : seuls les traitements de paiement
+     * autorisés de cette classe peuvent l'utiliser.
+     */
+    private function applyLockedOrderPaymentState(
+        Order $order,
+        int $newTotalPaid,
+        ConvertStockReservation $converter,
+        ?int $userId = null
+    ): void {
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException(
+                'Une transaction SQL est obligatoire.'
+            );
+        }
+
+        $orderTotal = $this->amountToCents(
+            (string) $order->total
+        );
+
+        if (
+            $orderTotal <= 0 ||
+            $newTotalPaid <= 0 ||
+            $newTotalPaid > $orderTotal
+        ) {
+            throw ValidationException::withMessages([
+                'amount' => 'Total payé invalide.',
+            ]);
+        }
+
+        // Paiement partiel : conserver les réservations.
+        if ($newTotalPaid < $orderTotal) {
+            $order->payment_status = 'PARTIALLY_PAID';
+        } else {
+            // Paiement intégral : convertir les réservations.
+            $this->convertReservedStock(
+                order: $order,
+                converter: $converter,
+                userId: $userId
+            );
+
+            $order->payment_status = 'PAID';
+        }
+
+        $order->save();
+    }
 
 
     public function execute(): never
