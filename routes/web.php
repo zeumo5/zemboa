@@ -1,7 +1,7 @@
 <?php
 
 
-
+use App\Http\Controllers\MobileMoneyReconciliationController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\StockController;
 use App\Http\Controllers\ProductVariantController;
@@ -84,4 +84,32 @@ Route::middleware(['auth', 'tenant'])->group(function () {
 
     Route::patch('/customers/{customer}', [CustomerController::class, 'update'])
     ->name('customers.update');
+
+    // Réconciliation Mobile Money
+    // Consultation des dossiers de la boutique.
+    Route::get(
+        '/payments/reconciliations',
+        [MobileMoneyReconciliationController::class, 'index']
+    )->name('payments.reconciliations.index');
+
+
+    // Consulter les détails d'un dossier
+    // de réconciliation de sa boutique.
+    Route::get(
+        '/payments/reconciliations/{caseId}',
+        [MobileMoneyReconciliationController::class, 'show']
+    )->whereNumber('caseId')
+     ->name('payments.reconciliations.show');
+
+
+    // Clôturer administrativement un dossier
+    // de réconciliation Mobile Money.
+    Route::patch(
+        '/payments/reconciliations/{caseId}/resolve',
+        [MobileMoneyReconciliationController::class, 'resolve']
+    )->whereNumber('caseId')
+     ->name('payments.reconciliations.resolve');
+
+
+
 });

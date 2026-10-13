@@ -2,6 +2,9 @@
 
 namespace Tests\Feature;
 
+
+use App\Models\Role;
+use App\Models\Permission;
 use App\Actions\Payments\ReserveMobileMoneyTransactionClaim;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Database\QueryException;
@@ -34,10 +37,15 @@ class OpenLateMobileMoneyReconciliationCaseTest extends TestCase
             'status' => 'ACTIVE',
         ]);
 
+
         $user = User::factory()->create([
             'store_id' => $store->id,
         ]);
 
+        // Donner au propriétaire la permission nécessaire.
+        $this->grantReconciliationPermission($user);
+
+        // Authentifier l'utilisateur dans sa boutique.
         $this->actingAs($user);
         app(TenantContext::class)->setFromUser($user);
 
@@ -155,6 +163,47 @@ class OpenLateMobileMoneyReconciliationCaseTest extends TestCase
 
         $this->assertSame($case->id, $secondCase->id);
 
+
+        // 10. Vérifier que l'ouverture est historisée.
+        $this->assertDatabaseHas(
+            'mobile_money_reconciliation_events',
+            [
+                'store_id' => $store->id,
+                'reconciliation_case_id' => $case->id,
+                'actor_user_id' => $user->id,
+                'event_type' => 'OPENED',
+            ]
+        );
+
+        // 11. La deuxième vérification ne doit pas
+        // créer un événement OPENED supplémentaire.
+        $this->assertSame(
+            1,
+            DB::table('mobile_money_reconciliation_events')
+                ->where('reconciliation_case_id', $case->id)
+                ->where('event_type', 'OPENED')
+                ->count()
+        );
+
+        // 12. Vérifier le motif enregistré.
+        $event = DB::table('mobile_money_reconciliation_events')
+            ->where('reconciliation_case_id', $case->id)
+            ->where('event_type', 'OPENED')
+            ->firstOrFail();
+
+        $details = json_decode(
+            $event->details,
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
+
+        $this->assertSame(
+            'LATE_PROVIDER_SUCCESS',
+            $details['reason']
+        );
+
+
         $this->assertSame(
             1,
             MobileMoneyReconciliationCase::query()
@@ -173,7 +222,9 @@ class OpenLateMobileMoneyReconciliationCaseTest extends TestCase
                 'status' => 'ACTIVE',
             ]);
 
+
             $user = User::factory()->create([
+                'store_id' => $store->id,
             ]);
 
             $this->actingAs($user);
@@ -325,12 +376,18 @@ class OpenLateMobileMoneyReconciliationCaseTest extends TestCase
             'status' => 'ACTIVE',
         ]);
 
+
         $userB = User::factory()->create([
             'store_id' => $storeB->id,
         ]);
 
+        // Autoriser la réconciliation pour ce scénario.
+        $this->grantReconciliationPermission($userB);
+
+        // Authentifier l'utilisateur de la boutique B.
         $this->actingAs($userB);
         app(TenantContext::class)->setFromUser($userB);
+
 
         $accountB = StorePaymentAccount::create([
             'method' => 'MTN_MOMO',
@@ -493,6 +550,11 @@ class OpenLateMobileMoneyReconciliationCaseTest extends TestCase
             'store_id' => $storeB->id,
         ]);
 
+        // Donner la permission de réconciliation
+        // à l'utilisateur de la boutique B.
+        $this->grantReconciliationPermission($userB);
+
+        // Authentifier l'utilisateur dans sa boutique.
         $this->actingAs($userB);
         app(TenantContext::class)->setFromUser($userB);
 
@@ -588,4 +650,312 @@ class OpenLateMobileMoneyReconciliationCaseTest extends TestCase
             $orderB->fresh()->payment_status
         );
     }
+
+
+    private function grantReconciliationPermission(User $user): void
+    {
+        // Préparer le rôle dans la base de test.
+        $role = Role::updateOrCreate(
+            ['code' => 'STORE_OWNER'],
+            ['name' => 'Propriétaire de boutique']
+        );
+
+        // Préparer la permission dans la base de test.
+        $permission = Permission::updateOrCreate(
+            ['code' => 'payments.reconciliation.create'],
+            ['name' => 'Ouvrir un dossier de réconciliation']
+        );
+
+        // Attribuer la permission au rôle.
+        $role->permissions()->syncWithoutDetaching([
+            $permission->id,
+        ]);
+
+        // Attribuer le rôle à l'utilisateur.
+        $user->roles()->syncWithoutDetaching([
+            $role->id,
+        ]);
+    }
+
+
+public function test_user_without_permission_cannot_open_reconciliation_case(): void
+{
+    // 1. Créer une boutique de test.
+    $store = Store::create([
+        'name' => 'Boutique Sans Permission',
+        'slug' => 'recon-no-permission',
+        'status' => 'ACTIVE',
+    ]);
+
+    // 2. Créer un utilisateur SANS rôle
+    // ni permission de réconciliation.
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $this->actingAs($user);
+    app(TenantContext::class)->setFromUser($user);
+
+    // 3. Créer un paiement échoué.
+    $customer = Customer::create([
+        'name' => 'Client Test RBAC',
+        'phone' => '690000450',
+    ]);
+
+    $order = Order::create([
+        'customer_id' => $customer->id,
+        'order_number' => 'ZM-RECON-RBAC-001',
+        'fulfillment_type' => 'PICKUP',
+        'customer_name' => 'Client Test RBAC',
+        'customer_phone' => '690000450',
+        'subtotal' => '5000.00',
+        'total' => '5000.00',
+    ]);
+
+    $payment = Payment::create([
+        'order_id' => $order->id,
+        'amount' => '5000.00',
+        'method' => 'MTN_MOMO',
+        'status' => 'FAILED',
+        'reference' => 'ZM-RBAC-PAY-001',
+    ]);
+
+    // 4. Tenter une ouverture non autorisée.
+
+    // Fournir un simulateur pour permettre à Laravel
+    // de construire l'action dans ce test uniquement.
+    $verifier = \Mockery::mock(MobileMoneyVerifier::class);
+
+    // Un utilisateur sans permission ne doit jamais
+    // déclencher une vérification auprès du prestataire.
+    $verifier->shouldNotReceive('verify');
+
+    $this->app->instance(
+        MobileMoneyVerifier::class,
+        $verifier
+    );
+
+    try {
+        app(OpenLateMobileMoneyReconciliationCase::class)
+            ->execute($payment->id);
+
+        $this->fail(
+            'Un utilisateur sans permission doit être refusé.'
+        );
+    } catch (
+        \Symfony\Component\HttpKernel\Exception\HttpException $exception
+    ) {
+        $this->assertSame(403, $exception->getStatusCode());
+    }
+
+    // 5. Vérifier qu'aucune donnée financière
+    // n'a été modifiée.
+    $this->assertSame('FAILED', $payment->fresh()->status);
+
+    $this->assertSame(
+        'UNPAID',
+        $order->fresh()->payment_status
+    );
+
+    $this->assertDatabaseCount(
+        'mobile_money_reconciliation_cases',
+        0
+    );
+
+    $this->assertDatabaseCount(
+        'mobile_money_transaction_claims',
+        0
+    );
+}
+
+
+public function test_delivery_agent_cannot_open_reconciliation_case(): void
+{
+    // 1. Créer une boutique.
+    $store = Store::create([
+        'name' => 'Boutique Livraison RBAC',
+        'slug' => 'recon-delivery-rbac',
+        'status' => 'ACTIVE',
+    ]);
+
+    // 2. Créer un utilisateur de cette boutique.
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    // 3. Lui attribuer uniquement le rôle livreur.
+    $deliveryRole = Role::updateOrCreate(
+        ['code' => 'DELIVERY_AGENT'],
+        ['name' => 'Agent de livraison']
+    );
+
+    $user->roles()->attach($deliveryRole->id);
+
+    // Vérifier qu'il ne possède pas la permission.
+    $this->assertFalse(
+        $user->hasPermission('payments.reconciliation.create')
+    );
+
+    // 4. Authentifier le livreur.
+    $this->actingAs($user);
+    app(TenantContext::class)->setFromUser($user);
+
+    // 5. Simuler le vérificateur sans l'appeler.
+    $verifier = \Mockery::mock(MobileMoneyVerifier::class);
+    $verifier->shouldNotReceive('verify');
+
+    $this->app->instance(
+        MobileMoneyVerifier::class,
+        $verifier
+    );
+
+    // 6. Tenter une ouverture de dossier.
+    // Le contrôle RBAC doit refuser l'accès
+    // avant même la recherche du paiement.
+    try {
+        app(OpenLateMobileMoneyReconciliationCase::class)
+            ->execute(999999);
+
+        $this->fail(
+            'Un livreur ne doit pas ouvrir un dossier financier.'
+        );
+    } catch (
+        \Symfony\Component\HttpKernel\Exception\HttpException $exception
+    ) {
+        $this->assertSame(403, $exception->getStatusCode());
+    }
+
+    // 7. Aucun dossier ou claim créé.
+    $this->assertDatabaseCount(
+        'mobile_money_reconciliation_cases',
+        0
+    );
+
+    $this->assertDatabaseCount(
+        'mobile_money_transaction_claims',
+        0
+    );
+}
+
+
+public function test_store_owner_cannot_reconcile_another_stores_payment(): void
+{
+    // 1. Créer la boutique A.
+    $storeA = Store::create([
+        'name' => 'Boutique Isolation Alpha',
+        'slug' => 'recon-isolation-alpha',
+        'status' => 'ACTIVE',
+    ]);
+
+    $userA = User::factory()->create([
+        'store_id' => $storeA->id,
+    ]);
+
+    $this->actingAs($userA);
+    app(TenantContext::class)->setFromUser($userA);
+
+    // 2. Créer une commande de la boutique A.
+    $customerA = Customer::create([
+        'name' => 'Client Isolation Alpha',
+        'phone' => '690000601',
+    ]);
+
+    $orderA = Order::create([
+        'customer_id' => $customerA->id,
+        'order_number' => 'ZM-RECON-ISOLATION-A',
+        'fulfillment_type' => 'PICKUP',
+        'customer_name' => 'Client Isolation Alpha',
+        'customer_phone' => '690000601',
+        'subtotal' => '7000.00',
+        'total' => '7000.00',
+    ]);
+
+    $paymentA = Payment::create([
+        'order_id' => $orderA->id,
+        'amount' => '7000.00',
+        'method' => 'MTN_MOMO',
+        'status' => 'FAILED',
+        'reference' => 'ZM-RECON-ISOLATION-PAY-A',
+    ]);
+
+    // 3. Créer la boutique B.
+    $storeB = Store::create([
+        'name' => 'Boutique Isolation Beta',
+        'slug' => 'recon-isolation-beta',
+        'status' => 'ACTIVE',
+    ]);
+
+    $userB = User::factory()->create([
+        'store_id' => $storeB->id,
+    ]);
+
+    // Donner la permission à l'utilisateur B.
+    $this->grantReconciliationPermission($userB);
+
+    $this->assertTrue(
+        $userB->hasPermission('payments.reconciliation.create')
+    );
+
+    // 4. Passer dans le contexte de la boutique B.
+    $this->actingAs($userB);
+    app(TenantContext::class)->setFromUser($userB);
+
+    // Aucun appel au prestataire ne doit être effectué.
+    $verifier = \Mockery::mock(MobileMoneyVerifier::class);
+    $verifier->shouldNotReceive('verify');
+
+    $this->app->instance(
+        MobileMoneyVerifier::class,
+        $verifier
+    );
+
+    // 5. La boutique B tente d'accéder au paiement A.
+    try {
+        app(OpenLateMobileMoneyReconciliationCase::class)
+            ->execute($paymentA->id);
+
+        $this->fail(
+            'Une boutique ne doit pas accéder '
+            . 'au paiement d’une autre boutique.'
+        );
+
+    } catch (
+        \Illuminate\Database\Eloquent\ModelNotFoundException $exception
+    ) {
+        // Le filtre tenant doit masquer le paiement.
+        $this->assertSame(
+            Payment::class,
+            $exception->getModel()
+        );
+    }
+
+    // 6. Vérifier qu'aucune donnée n'a changé.
+    // DB::table est utilisé ici uniquement dans le test
+    // pour examiner le paiement de la boutique A.
+    $this->assertSame(
+        'FAILED',
+        DB::table('payments')
+            ->where('id', $paymentA->id)
+            ->value('status')
+    );
+
+    $this->assertSame(
+        'UNPAID',
+        DB::table('orders')
+            ->where('id', $orderA->id)
+            ->value('payment_status')
+    );
+
+    $this->assertDatabaseCount(
+        'mobile_money_reconciliation_cases',
+        0
+    );
+
+    $this->assertDatabaseCount(
+        'mobile_money_transaction_claims',
+        0
+    );
+}
+
+
 }

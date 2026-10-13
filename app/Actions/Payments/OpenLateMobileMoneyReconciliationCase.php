@@ -3,6 +3,8 @@
 namespace App\Actions\Payments;
 
 
+use App\Models\User;
+use Illuminate\Support\Facades\Auth;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\StorePaymentAccount;
@@ -13,17 +15,41 @@ use Illuminate\Validation\ValidationException;
 
 final class OpenLateMobileMoneyReconciliationCase
 {
+
     public function __construct(
-        private readonly MobileMoneyVerifier $verifier,
         private readonly ReserveMobileMoneyTransactionClaim $reserveTransactionClaim
     ) {}
 
+
+
     public function execute(int $paymentId): MobileMoneyReconciliationCase
     {
-        // 1. Retrouver le paiement de la boutique active.
+        // 1. Exiger un utilisateur authentifié.
+        $user = Auth::user();
+
+        if (!$user instanceof User) {
+            abort(401, 'Authentification requise.');
+        }
+
+        // 2. Vérifier la permission RBAC.
+        if (!$user->hasPermission('payments.reconciliation.create')) {
+            abort(403, 'Permission de réconciliation refusée.');
+        }
+
+        // 3. Retrouver le paiement de la boutique active.
         $payment = Payment::query()
             ->whereKey($paymentId)
             ->firstOrFail();
+
+        // 4. Vérifier explicitement l'appartenance
+        // du paiement à la boutique de l'utilisateur.
+        if (
+            $user->store_id === null ||
+            (int) $user->store_id !== (int) $payment->store_id
+        ) {
+            abort(403, 'Accès interdit à ce paiement.');
+        }
+
 
         if (
             $payment->status !== 'FAILED' ||
@@ -39,7 +65,9 @@ final class OpenLateMobileMoneyReconciliationCase
 
         // 2. Interroger le vérificateur côté serveur.
         // Ne jamais accepter un résultat du navigateur.
-        $result = $this->verifier->verify($payment);
+
+        $result = app(MobileMoneyVerifier::class)->verify($payment);
+
 
         // 3. Seul un SUCCESS tardif est traité ici.
         if (
@@ -61,10 +89,13 @@ final class OpenLateMobileMoneyReconciliationCase
         }
 
         // 4. Verrouiller puis revérifier les données.
+
         return DB::transaction(function () use (
             $paymentId,
-            $result
+            $result,
+            $user
         ) {
+
             $lookup = Payment::query()
                 ->whereKey($paymentId)
                 ->firstOrFail();
@@ -205,7 +236,21 @@ final class OpenLateMobileMoneyReconciliationCase
                 'Succès signalé après un échec enregistré.',
             ]);
 
+
             $case->save();
+
+            // Enregistrer l'ouverture du dossier
+            // dans la même transaction SQL.
+            DB::table('mobile_money_reconciliation_events')->insert([
+                'store_id' => $case->store_id,
+                'reconciliation_case_id' => $case->id,
+                'actor_user_id' => $user->id,
+                'event_type' => 'OPENED',
+                'details' => json_encode([
+                    'reason' => 'LATE_PROVIDER_SUCCESS',
+                ], JSON_THROW_ON_ERROR),
+                'created_at' => now(),
+            ]);
 
             return $case;
         });

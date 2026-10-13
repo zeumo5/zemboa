@@ -48,8 +48,25 @@ class PermissionSeeder extends Seeder
             ['name' => 'Modifier les livraisons', 'code' => 'deliveries.update'],
 
             // Paiements
+
+            // Paiements
             ['name' => 'Voir les paiements', 'code' => 'payments.view'],
             ['name' => 'Confirmer un paiement', 'code' => 'payments.confirm'],
+
+            // Réconciliation Mobile Money
+            [
+                'name' => 'Consulter les dossiers de réconciliation',
+                'code' => 'payments.reconciliation.view',
+            ],
+            [
+                'name' => 'Ouvrir un dossier de réconciliation',
+                'code' => 'payments.reconciliation.create',
+            ],
+            [
+                'name' => 'Résoudre un dossier de réconciliation',
+                'code' => 'payments.reconciliation.resolve',
+            ],
+
         ];
 
         foreach ($permissions as $permission) {

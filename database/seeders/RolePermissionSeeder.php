@@ -42,8 +42,16 @@ class RolePermissionSeeder extends Seeder
             'deliveries.view',
             'deliveries.update',
 
+
+            // Paiements
             'payments.view',
             'payments.confirm',
+
+            // Réconciliation Mobile Money
+            'payments.reconciliation.view',
+            'payments.reconciliation.create',
+            'payments.reconciliation.resolve',
+
         ])->pluck('id');
 
         $storeOwner->permissions()->sync($storeOwnerPermissions);
