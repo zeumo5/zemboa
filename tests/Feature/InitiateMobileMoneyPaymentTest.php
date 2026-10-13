@@ -119,6 +119,111 @@ class InitiateMobileMoneyPaymentTest extends TestCase
     }
 
     
+public function test_mobile_money_initiation_respects_existing_deposit(): void
+{
+    // 1. Creer une boutique fictive.
+    $store = Store::create([
+        'name' => 'Boutique Acompte Mobile Money',
+        'slug' => 'boutique-acompte-initiation',
+        'status' => 'ACTIVE',
+    ]);
+
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $this->actingAs($user);
+    app(TenantContext::class)->setFromUser($user);
+
+    // 2. Activer un compte marchand fictif.
+    $this->activateTestMerchantAccount('MTN_MOMO');
+
+    // 3. Creer un client fictif.
+    $customer = Customer::create([
+        'name' => 'Client Acompte Initiation',
+        'phone' => '+237690000099',
+    ]);
+
+    // 4. Creer une commande de 25 000 FCFA.
+    $order = Order::create([
+        'customer_id' => $customer->id,
+        'order_number' => 'ZM-INIT-ACOMPTE-001',
+        'fulfillment_type' => 'PICKUP',
+        'customer_name' => 'Client Acompte Initiation',
+        'customer_phone' => '+237690000099',
+        'subtotal' => '25000.00',
+        'total' => '25000.00',
+    ]);
+
+    // Simuler une commande partiellement payee.
+    $order->forceFill([
+        'payment_status' => 'PARTIALLY_PAID',
+    ])->save();
+
+    // 5. Simuler un acompte CASH confirme.
+    $deposit = Payment::create([
+        'order_id' => $order->id,
+        'amount' => '10000.00',
+        'method' => 'CASH',
+        'status' => 'CONFIRMED',
+        'reference' => 'ZM-INIT-CASH-001',
+        'confirmed_at' => now(),
+    ]);
+
+    // 6. Initier le paiement Mobile Money restant.
+    $payment = app(
+        InitiateMobileMoneyPayment::class
+    )->execute(
+        orderId: $order->id,
+        method: 'MTN_MOMO'
+    );
+
+    // 7. Le paiement doit couvrir uniquement
+    // les 15 000 FCFA restants.
+    $this->assertSame(
+        '15000.00',
+        $payment->amount
+    );
+
+    $this->assertSame('PENDING', $payment->status);
+    $this->assertSame('MTN_MOMO', $payment->method);
+    $this->assertSame($store->id, $payment->store_id);
+    $this->assertSame($order->id, $payment->order_id);
+
+    // 8. Le compte marchand doit etre associe.
+    $this->assertNotNull(
+        $payment->store_payment_account_id
+    );
+
+    // 9. L'acompte confirme reste intact.
+    $this->assertSame(
+        'CONFIRMED',
+        $deposit->fresh()->status
+    );
+
+    $this->assertSame(
+        '10000.00',
+        $deposit->fresh()->amount
+    );
+
+    // 10. La commande reste partiellement payee
+    // car le Mobile Money n'est pas confirme.
+    $this->assertSame(
+        'PARTIALLY_PAID',
+        $order->fresh()->payment_status
+    );
+
+    // 11. Un seul nouveau paiement en attente.
+    $this->assertSame(
+        1,
+        Payment::query()
+            ->where('order_id', $order->id)
+            ->where('status', 'PENDING')
+            ->count()
+    );
+}
+
+    
 public function test_duplicate_pending_mobile_money_payment_is_rejected(): void
 {
     // 1. Créer une boutique.
