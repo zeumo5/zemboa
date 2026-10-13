@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-
+use Illuminate\Database\UniqueConstraintViolationException;
 use App\Models\StorePaymentAccount;
 use App\Models\StockReservation;
 use App\Actions\Orders\CreateOrder;
@@ -747,15 +747,32 @@ class ConfirmPaymentConcurrencyTest extends TestCase
             $productId,
             $categoryId
         ) {
-            // 1. Paiements et articles de la commande.
+            // 1. Supprimer d'abord les réservations
+            // du registre central Mobile Money.
+            $db->table('mobile_money_transaction_claims')
+                ->where('store_id', $storeId)
+                ->whereIn('payment_id', function ($query) use (
+                    $orderId,
+                    $storeId
+                ) {
+                    $query->select('id')
+                        ->from('payments')
+                        ->where('order_id', $orderId)
+                        ->where('store_id', $storeId);
+                })
+                ->delete();
+
+            // 2. Supprimer les paiements de la commande.
             $db->table('payments')
                 ->where('order_id', $orderId)
                 ->where('store_id', $storeId)
                 ->delete();
 
+            // 3. Supprimer les articles de la commande.
             $db->table('order_items')
                 ->where('order_id', $orderId)
                 ->delete();
+
 
             // 2. Réservations associées à la commande.
             $db->table('stock_reservations')
@@ -1058,259 +1075,480 @@ class ConfirmPaymentConcurrencyTest extends TestCase
         }
     }
 
-    
-public function test_parallel_mobile_money_payments_convert_stock_only_once(): void
-{
-    // 1. Utiliser uniquement notre MySQL de test.
-    if (config('database.default') !== 'mysql') {
-        $this->markTestSkipped('Test réservé à MySQL.');
-    }
 
-    $this->assertSafeConcurrencyDatabase();
-
-    $db = DB::connection('mysql');
-
-    $scenario = null;
-    $account = null;
-    $processA = null;
-    $processB = null;
-
-    try {
-        // 2. Réutiliser le scénario existant :
-        // 10 articles en stock, 2 réservés,
-        // une commande de 10 000 FCFA.
-        $scenario = $db->transaction(
-            fn () => $this->createStockConcurrencyScenario()
-        );
-
-        $orderId = $scenario['order']->id;
-        $userId = $scenario['cashier']->id;
-        $variantId = $scenario['variant']->id;
-
-        // 3. Créer un compte marchand fictif vérifié.
-        $account = StorePaymentAccount::create([
-            'method' => 'MTN_MOMO',
-            'gateway' => 'TEST_GATEWAY',
-            'merchant_account_id' =>
-                'MERCHANT-CONC-' . Str::random(12),
-        ]);
-
-        $account->forceFill([
-            'status' => 'ACTIVE',
-            'verified_at' => now(),
-        ])->save();
-
-        // 4. Transformer les deux paiements CASH du
-        // scénario en paiements Mobile Money complets.
-        foreach (['paymentA', 'paymentB'] as $key) {
-            $payment = $scenario[$key];
-
-            $payment->method = 'MTN_MOMO';
-            $payment->reference =
-                'ZM-CONC-MOMO-' . Str::uuid();
-            $payment->store_payment_account_id = $account->id;
-            $payment->cash_received = null;
-            $payment->change_given = null;
-
-            $payment->save();
+    public function test_parallel_mobile_money_payments_convert_stock_only_once(): void
+    {
+        // 1. Utiliser uniquement notre MySQL de test.
+        if (config('database.default') !== 'mysql') {
+            $this->markTestSkipped('Test réservé à MySQL.');
         }
 
-        // 5. Préparer deux processus indépendants.
-        $makeProcess = function (int $paymentId) use (
-            $userId
-        ): Process {
-            $process = new Process([
-                PHP_BINARY,
-                'artisan',
-                '--env=testing',
-                'test:mobile-money-concurrency-worker',
-                (string) $paymentId,
-                (string) $userId,
-            ], base_path());
+        $this->assertSafeConcurrencyDatabase();
 
-            $process->setTimeout(30);
+        $db = DB::connection('mysql');
 
-            return $process;
-        };
+        $scenario = null;
+        $account = null;
+        $processA = null;
+        $processB = null;
 
-        $processA = $makeProcess(
-            $scenario['paymentA']->id
-        );
-
-        $processB = $makeProcess(
-            $scenario['paymentB']->id
-        );
-
-        // 6. Verrouiller la commande pour que
-        // les deux processus se retrouvent en attente.
-        $db->beginTransaction();
-
-        $lockedOrder = $db->table('orders')
-            ->where('id', $orderId)
-            ->lockForUpdate()
-            ->first();
-
-        $this->assertNotNull($lockedOrder);
-
-        $processA->start();
-        $processB->start();
-
-        usleep(2000000);
-
-        $this->assertTrue(
-            $processA->isRunning(),
-            'Processus A terminé prématurément : '
-                . $processA->getOutput()
-                . $processA->getErrorOutput()
-        );
-
-        $this->assertTrue(
-            $processB->isRunning(),
-            'Processus B terminé prématurément : '
-                . $processB->getOutput()
-                . $processB->getErrorOutput()
-        );
-
-        // 7. Libérer le verrou.
-        $db->rollBack();
-
-        $processA->wait();
-        $processB->wait();
-
-        $outputs = [
-            $processA->getOutput()
-                . $processA->getErrorOutput(),
-            $processB->getOutput()
-                . $processB->getErrorOutput(),
-        ];
-
-        // 8. Un succès et un refus, aucune erreur technique.
-        $confirmed = 0;
-        $rejected = 0;
-
-        foreach ($outputs as $output) {
-            $this->assertStringNotContainsString(
-                'RESULT=ERROR',
-                $output
+        try {
+            // 2. Réutiliser le scénario existant :
+            // 10 articles en stock, 2 réservés,
+            // une commande de 10 000 FCFA.
+            $scenario = $db->transaction(
+                fn() => $this->createStockConcurrencyScenario()
             );
 
-            if (str_contains($output, 'RESULT=CONFIRMED')) {
-                $confirmed++;
+            $orderId = $scenario['order']->id;
+            $userId = $scenario['cashier']->id;
+            $variantId = $scenario['variant']->id;
+
+            // 3. Créer un compte marchand fictif vérifié.
+            $account = StorePaymentAccount::create([
+                'method' => 'MTN_MOMO',
+                'gateway' => 'TEST_GATEWAY',
+                'merchant_account_id' =>
+                'MERCHANT-CONC-' . Str::random(12),
+            ]);
+
+            $account->forceFill([
+                'status' => 'ACTIVE',
+                'verified_at' => now(),
+            ])->save();
+
+            // 4. Transformer les deux paiements CASH du
+            // scénario en paiements Mobile Money complets.
+            foreach (['paymentA', 'paymentB'] as $key) {
+                $payment = $scenario[$key];
+
+                $payment->method = 'MTN_MOMO';
+                $payment->reference =
+                    'ZM-CONC-MOMO-' . Str::uuid();
+                $payment->store_payment_account_id = $account->id;
+                $payment->cash_received = null;
+                $payment->change_given = null;
+
+                $payment->save();
             }
 
-            if (str_contains($output, 'RESULT=REJECTED')) {
-                $rejected++;
-            }
-        }
+            // 5. Préparer deux processus indépendants.
+            $makeProcess = function (int $paymentId) use (
+                $userId
+            ): Process {
+                $process = new Process([
+                    PHP_BINARY,
+                    'artisan',
+                    '--env=testing',
+                    'test:mobile-money-concurrency-worker',
+                    (string) $paymentId,
+                    (string) $userId,
+                ], base_path());
 
-        $this->assertSame(
-            1,
-            $confirmed,
-            implode("\n", $outputs)
-        );
+                $process->setTimeout(30);
 
-        $this->assertSame(
-            1,
-            $rejected,
-            implode("\n", $outputs)
-        );
+                return $process;
+            };
 
-        // 9. Vérifier les paiements en base.
-        $payments = $db->table('payments')
-            ->where('order_id', $orderId)
-            ->get();
+            $processA = $makeProcess(
+                $scenario['paymentA']->id
+            );
 
-        $this->assertSame(2, $payments->count());
+            $processB = $makeProcess(
+                $scenario['paymentB']->id
+            );
 
-        $this->assertSame(
-            1,
-            $payments->where('status', 'CONFIRMED')->count()
-        );
+            // 6. Verrouiller la commande pour que
+            // les deux processus se retrouvent en attente.
+            $db->beginTransaction();
 
-        $this->assertSame(
-            1,
-            $payments->where('status', 'PENDING')->count()
-        );
-
-        // 10. La commande est payée.
-        $this->assertSame(
-            'PAID',
-            $db->table('orders')
+            $lockedOrder = $db->table('orders')
                 ->where('id', $orderId)
-                ->value('payment_status')
-        );
+                ->lockForUpdate()
+                ->first();
 
-        // 11. Le stock n'est converti qu'une fois.
-        $stock = $db->table('stock_levels')
-            ->where('product_variant_id', $variantId)
-            ->first();
+            $this->assertNotNull($lockedOrder);
 
-        $this->assertNotNull($stock);
+            $processA->start();
+            $processB->start();
 
-        $this->assertSame(
-            8,
-            (int) $stock->physical_quantity
-        );
+            usleep(2000000);
 
-        $this->assertSame(
-            0,
-            (int) $stock->reserved_quantity
-        );
+            $this->assertTrue(
+                $processA->isRunning(),
+                'Processus A terminé prématurément : '
+                    . $processA->getOutput()
+                    . $processA->getErrorOutput()
+            );
 
-        $sales = $db->table('stock_movements')
-            ->where('product_variant_id', $variantId)
-            ->where('type', 'SALE')
-            ->get();
+            $this->assertTrue(
+                $processB->isRunning(),
+                'Processus B terminé prématurément : '
+                    . $processB->getOutput()
+                    . $processB->getErrorOutput()
+            );
 
-        $this->assertSame(1, $sales->count());
-
-        $this->assertSame(
-            2,
-            (int) $sales->first()->quantity
-        );
-
-    } finally {
-        // 12. Toujours libérer les verrous.
-        while ($db->transactionLevel() > 0) {
+            // 7. Libérer le verrou.
             $db->rollBack();
-        }
 
-        // Arrêter les processus avant le nettoyage.
-        foreach ([$processA, $processB] as $process) {
-            if ($process !== null && $process->isRunning()) {
-                $process->stop(1);
+            $processA->wait();
+            $processB->wait();
+
+            $outputs = [
+                $processA->getOutput()
+                    . $processA->getErrorOutput(),
+                $processB->getOutput()
+                    . $processB->getErrorOutput(),
+            ];
+
+            // 8. Un succès et un refus, aucune erreur technique.
+            $confirmed = 0;
+            $rejected = 0;
+
+            foreach ($outputs as $output) {
+                $this->assertStringNotContainsString(
+                    'RESULT=ERROR',
+                    $output
+                );
+
+                if (str_contains($output, 'RESULT=CONFIRMED')) {
+                    $confirmed++;
+                }
+
+                if (str_contains($output, 'RESULT=REJECTED')) {
+                    $rejected++;
+                }
+            }
+
+            $this->assertSame(
+                1,
+                $confirmed,
+                implode("\n", $outputs)
+            );
+
+            $this->assertSame(
+                1,
+                $rejected,
+                implode("\n", $outputs)
+            );
+
+            // 9. Vérifier les paiements en base.
+            $payments = $db->table('payments')
+                ->where('order_id', $orderId)
+                ->get();
+
+            $this->assertSame(2, $payments->count());
+
+            $this->assertSame(
+                1,
+                $payments->where('status', 'CONFIRMED')->count()
+            );
+
+            $this->assertSame(
+                1,
+                $payments->where('status', 'PENDING')->count()
+            );
+
+            // 10. La commande est payée.
+            $this->assertSame(
+                'PAID',
+                $db->table('orders')
+                    ->where('id', $orderId)
+                    ->value('payment_status')
+            );
+
+            // 11. Le stock n'est converti qu'une fois.
+            $stock = $db->table('stock_levels')
+                ->where('product_variant_id', $variantId)
+                ->first();
+
+            $this->assertNotNull($stock);
+
+            $this->assertSame(
+                8,
+                (int) $stock->physical_quantity
+            );
+
+            $this->assertSame(
+                0,
+                (int) $stock->reserved_quantity
+            );
+
+            $sales = $db->table('stock_movements')
+                ->where('product_variant_id', $variantId)
+                ->where('type', 'SALE')
+                ->get();
+
+            $this->assertSame(1, $sales->count());
+
+            $this->assertSame(
+                2,
+                (int) $sales->first()->quantity
+            );
+        } finally {
+            // 12. Toujours libérer les verrous.
+            while ($db->transactionLevel() > 0) {
+                $db->rollBack();
+            }
+
+            // Arrêter les processus avant le nettoyage.
+            foreach ([$processA, $processB] as $process) {
+                if ($process !== null && $process->isRunning()) {
+                    $process->stop(1);
+                }
+            }
+
+            // Détacher et supprimer le compte marchand
+            // fictif avant le nettoyage de la boutique.
+            if ($scenario !== null && $account !== null) {
+                $db->transaction(function () use (
+                    $db,
+                    $scenario,
+                    $account
+                ) {
+                    $db->table('payments')
+                        ->where(
+                            'order_id',
+                            $scenario['order']->id
+                        )
+                        ->update([
+                            'store_payment_account_id' => null,
+                        ]);
+
+                    $db->table('store_payment_accounts')
+                        ->where('id', $account->id)
+                        ->delete();
+                });
+            }
+
+            if ($scenario !== null) {
+                $this->cleanupStockConcurrencyScenario(
+                    $scenario
+                );
             }
         }
+    }
 
-        // Détacher et supprimer le compte marchand
-        // fictif avant le nettoyage de la boutique.
-        if ($scenario !== null && $account !== null) {
-            $db->transaction(function () use (
-                $db,
-                $scenario,
-                $account
-            ) {
+
+    public function test_parallel_mobile_money_claims_reject_same_external_id(): void
+    {
+        if (config('database.default') !== 'mysql') {
+            $this->markTestSkipped('Test réservé à MySQL.');
+        }
+
+        $this->assertSafeConcurrencyDatabase();
+
+        $db = DB::connection('mysql');
+        $scenarios = [];
+        $processes = [];
+        $externalId = 'FAKE-SHARED-' . Str::uuid();
+
+        try {
+            // Deux boutiques et deux commandes indépendantes.
+            foreach (['A', 'B'] as $suffix) {
+                $scenario = $db->transaction(
+                    fn() => $this->createStockConcurrencyScenario()
+                );
+
+                $scenarios[] = $scenario;
+                $index = array_key_last($scenarios);
+
+                $user = $scenario['cashier'];
+
+                $this->actingAs($user);
+                app(TenantContext::class)->setFromUser($user);
+
+                // Compte marchand fictif propre à la boutique.
+                $account = StorePaymentAccount::create([
+                    'method' => 'MTN_MOMO',
+                    'gateway' => 'TEST_GATEWAY',
+                    'merchant_account_id' =>
+                    'MERCHANT-' . Str::uuid(),
+                ]);
+
+                $account->forceFill([
+                    'status' => 'ACTIVE',
+                    'verified_at' => now(),
+                ])->save();
+
+                $scenarios[$index]['account'] = $account;
+
+                // Transformer le premier paiement en MTN MoMo.
+                $payment = $scenario['paymentA'];
+
+                $payment->method = 'MTN_MOMO';
+                $payment->reference =
+                    'ZM-CONC-CLAIM-' . Str::uuid();
+                $payment->store_payment_account_id = $account->id;
+                $payment->cash_received = null;
+                $payment->change_given = null;
+                $payment->save();
+
+                // Chaque processus reçoit le même
+                // identifiant externe fictif.
+                $process = new Process([
+                    PHP_BINARY,
+                    'artisan',
+                    '--env=testing',
+                    'test:mobile-money-concurrency-worker',
+                    (string) $payment->id,
+                    (string) $user->id,
+                    '--external-tx-id=' . $externalId,
+                ], base_path());
+
+                $process->setTimeout(30);
+                $processes[] = $process;
+            }
+
+            // Verrouiller les deux commandes temporairement.
+            $db->beginTransaction();
+
+            foreach ($scenarios as $scenario) {
+                $db->table('orders')
+                    ->where('id', $scenario['order']->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+            }
+
+            // Démarrer les deux processus indépendants.
+            foreach ($processes as $process) {
+                $process->start();
+            }
+
+            usleep(2000000);
+
+            foreach ($processes as $process) {
+                $this->assertTrue(
+                    $process->isRunning(),
+                    'Processus terminé prématurément : '
+                        . $process->getOutput()
+                        . $process->getErrorOutput()
+                );
+            }
+
+            // Libérer les verrous simultanément.
+            $db->rollBack();
+
+            foreach ($processes as $process) {
+                $process->wait();
+            }
+
+            $outputs = array_map(
+                fn(Process $process) =>
+                $process->getOutput()
+                    . $process->getErrorOutput(),
+                $processes
+            );
+
+            // Un seul succès, un seul refus.
+            $confirmed = 0;
+            $rejected = 0;
+
+            foreach ($outputs as $output) {
+                $this->assertStringNotContainsString(
+                    'RESULT=ERROR',
+                    $output
+                );
+
+                if (str_contains($output, 'RESULT=CONFIRMED')) {
+                    $confirmed++;
+                }
+
+                if (str_contains($output, 'RESULT=REJECTED')) {
+                    $rejected++;
+                }
+            }
+
+            $this->assertSame(
+                1,
+                $confirmed,
+                implode("\n", $outputs)
+            );
+
+            $this->assertSame(
+                1,
+                $rejected,
+                implode("\n", $outputs)
+            );
+
+            // Une seule réservation dans le registre central.
+            $this->assertSame(
+                1,
+                $db->table('mobile_money_transaction_claims')
+                    ->where('provider', 'MTN_MOMO')
+                    ->where('provider_transaction_id', $externalId)
+                    ->count()
+            );
+
+            // Vérifier les deux commandes.
+            $paidOrders = 0;
+            $confirmedPayments = 0;
+            $sales = 0;
+
+            foreach ($scenarios as $scenario) {
+                $orderId = $scenario['order']->id;
+                $variantId = $scenario['variant']->id;
+
+                if (
+                    $db->table('orders')
+                    ->where('id', $orderId)
+                    ->value('payment_status') === 'PAID'
+                ) {
+                    $paidOrders++;
+                }
+
+                if (
+                    $db->table('payments')
+                    ->where('id', $scenario['paymentA']->id)
+                    ->value('status') === 'CONFIRMED'
+                ) {
+                    $confirmedPayments++;
+                }
+
+                $sales += $db->table('stock_movements')
+                    ->where('product_variant_id', $variantId)
+                    ->where('type', 'SALE')
+                    ->count();
+            }
+
+            $this->assertSame(1, $paidOrders);
+            $this->assertSame(1, $confirmedPayments);
+            $this->assertSame(1, $sales);
+        } finally {
+            // Libérer toutes les transactions restantes.
+            while ($db->transactionLevel() > 0) {
+                $db->rollBack();
+            }
+
+            // Arrêter les processus avant de nettoyer.
+            foreach ($processes as $process) {
+                if ($process->isRunning()) {
+                    $process->stop(1);
+                }
+            }
+
+            // Supprimer uniquement les données de ces tests.
+            foreach (array_reverse($scenarios) as $scenario) {
+                $db->table('mobile_money_transaction_claims')
+                    ->where('payment_id', $scenario['paymentA']->id)
+                    ->delete();
+
                 $db->table('payments')
-                    ->where(
-                        'order_id',
-                        $scenario['order']->id
-                    )
+                    ->where('order_id', $scenario['order']->id)
                     ->update([
                         'store_payment_account_id' => null,
                     ]);
 
-                $db->table('store_payment_accounts')
-                    ->where('id', $account->id)
-                    ->delete();
-            });
-        }
+                if (isset($scenario['account'])) {
+                    $db->table('store_payment_accounts')
+                        ->where('id', $scenario['account']->id)
+                        ->delete();
+                }
 
-        if ($scenario !== null) {
-            $this->cleanupStockConcurrencyScenario(
-                $scenario
-            );
+                $this->cleanupStockConcurrencyScenario(
+                    $scenario
+                );
+            }
         }
     }
-}
-
 }

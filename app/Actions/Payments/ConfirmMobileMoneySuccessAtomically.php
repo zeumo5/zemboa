@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Actions\Payments;
 
 
@@ -17,7 +18,8 @@ final class ConfirmMobileMoneySuccessAtomically
         private readonly VerifyMobileMoneyPayment $verifyPayment,
         private readonly ValidateLockedMobileMoneySuccess $validateLocked,
         private readonly FinalizeOrderPayment $finalizePayment,
-        private readonly ConvertStockReservation $convertStock
+        private readonly ConvertStockReservation $convertStock,
+        private readonly ReserveMobileMoneyTransactionClaim $reserveTransactionClaim
     ) {}
 
     public function execute(int $paymentId): Payment
@@ -32,7 +34,7 @@ final class ConfirmMobileMoneySuccessAtomically
         if ($result->status !== 'SUCCESS') {
             throw ValidationException::withMessages([
                 'payment' =>
-                    'Le prestataire ne confirme pas ce paiement.',
+                'Le prestataire ne confirme pas ce paiement.',
             ]);
         }
 
@@ -57,10 +59,10 @@ final class ConfirmMobileMoneySuccessAtomically
             // 3. Calculer le montant réellement payé.
             $newTotalPaid =
                 $this->finalizePayment
-                    ->calculateLockedMobileMoneyTotal(
-                        order: $order,
-                        payment: $payment
-                    );
+                ->calculateLockedMobileMoneyTotal(
+                    order: $order,
+                    payment: $payment
+                );
 
             $orderTotal = $this->finalizePayment
                 ->amountToCents((string) $order->total);
@@ -78,9 +80,21 @@ final class ConfirmMobileMoneySuccessAtomically
             ) {
                 throw ValidationException::withMessages([
                     'balance_due_at' =>
-                        'Une date limite future est obligatoire pour un acompte.',
+                    'Une date limite future est obligatoire pour un acompte.',
                 ]);
             }
+            // Réserver l'identifiant externe dans le registre
+            // central avant toute confirmation du paiement.
+            //
+            // Si cet identifiant appartient déjà à un autre
+            // paiement, MySQL refusera l'insertion.
+            // Toute la transaction sera alors annulée.
+            $this->reserveTransactionClaim->execute(
+                payment: $payment,
+                provider: $result->provider,
+                providerTransactionId: $result->providerTransactionId,
+                claimType: 'CONFIRMATION'
+            );
 
             // 4. Enregistrer la transaction externe.
             // L'index UNIQUE MySQL protège des doublons.

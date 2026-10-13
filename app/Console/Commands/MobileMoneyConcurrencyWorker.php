@@ -11,6 +11,7 @@ use App\Payments\MobileMoneyVerifier;
 use App\Payments\MobileMoneyVerificationResult;
 use App\Support\TenantContext;
 use Illuminate\Console\Command;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -18,10 +19,10 @@ use Throwable;
 
 final class MobileMoneyConcurrencyWorker extends Command
 {
-    protected $signature =
-        'test:mobile-money-concurrency-worker
+    protected $signature = 'test:mobile-money-concurrency-worker
         {paymentId : Identifiant du paiement}
-        {userId : Utilisateur de la boutique}';
+        {userId : Utilisateur de la boutique}
+        {--external-tx-id= : Identifiant externe fictif pour les tests}';
 
     protected $description =
         'Tester la concurrence Mobile Money sur MySQL isolé';
@@ -43,7 +44,7 @@ final class MobileMoneyConcurrencyWorker extends Command
         }
 
         try {
-            // 2. Vérifier la connexion MySQL réellement utilisée.
+            // 2. Vérifier la connexion MySQL réelle.
             $identity = DB::selectOne(
                 'SELECT DATABASE() AS db,
                         CURRENT_USER() AS account'
@@ -58,7 +59,7 @@ final class MobileMoneyConcurrencyWorker extends Command
                 return self::FAILURE;
             }
 
-            // 3. Valider les identifiants.
+            // 3. Vérifier les identifiants reçus.
             $paymentId = filter_var(
                 $this->argument('paymentId'),
                 FILTER_VALIDATE_INT
@@ -80,47 +81,53 @@ final class MobileMoneyConcurrencyWorker extends Command
                 return self::FAILURE;
             }
 
-            // 4. Initialiser le contexte de la boutique.
-            $user = User::query()
-                ->findOrFail($userId);
+            // 4. Identifier l'utilisateur.
+            $user = User::query()->findOrFail($userId);
 
+            // 5. Activer le contexte de sa boutique.
             app(TenantContext::class)->setFromUser($user);
 
             Auth::setUser($user);
 
-            // 5. Retrouver le paiement et son compte marchand.
+            // 6. Retrouver le paiement.
             $payment = Payment::query()
                 ->whereKey($paymentId)
                 ->firstOrFail();
 
+            // 7. Retrouver son compte marchand.
             $account = StorePaymentAccount::query()
                 ->whereKey($payment->store_payment_account_id)
                 ->where('store_id', $payment->store_id)
                 ->where('method', $payment->method)
                 ->firstOrFail();
 
-            // 6. Préparer une réponse simulée.
-            // Ce code est strictement réservé aux tests.
+            // 8. Préparer l'identifiant externe fictif.
+            // L'option permet aux deux processus
+            // d'utiliser le même identifiant en test.
+            $externalTransactionId =
+                $this->option('external-tx-id')
+                ?: 'FAKE-CONCURRENCY-' . $payment->id;
+
+            // 9. Simuler une réponse SUCCESS.
             $result = new MobileMoneyVerificationResult(
                 status: 'SUCCESS',
                 reference: (string) $payment->reference,
                 amount: (string) $payment->amount,
                 currency: 'XAF',
                 provider: $payment->method,
-                providerTransactionId:
-                    'FAKE-CONCURRENCY-' . $payment->id,
+                providerTransactionId: $externalTransactionId,
                 recipientMerchantAccountId:
                     (string) $account->merchant_account_id
             );
 
-            // 7. Injecter le simulateur uniquement
-            // dans ce processus de test isolé.
+            // 10. Injecter le simulateur uniquement
+            // dans le processus de test isolé.
             app()->instance(
                 MobileMoneyVerifier::class,
                 new FakeMobileMoneyVerifier($result)
             );
 
-            // 8. Tenter la confirmation atomique.
+            // 11. Tenter la confirmation atomique.
             $confirmed = app(
                 ConfirmMobileMoneySuccessAtomically::class
             )->execute($paymentId);
@@ -135,17 +142,34 @@ final class MobileMoneyConcurrencyWorker extends Command
 
         } catch (ValidationException $exception) {
 
-            // Refus métier attendu en cas de concurrence.
+            // Refus métier attendu.
+            $this->warn('RESULT=REJECTED');
+
+            return self::FAILURE;
+
+        } catch (UniqueConstraintViolationException $exception) {
+
+            // Refus attendu uniquement pour un doublon
+            // du registre central Mobile Money.
+            if (!str_contains(
+                $exception->getMessage(),
+                'mm_claim_provider_tx_unique'
+            )) {
+                $this->error('RESULT=ERROR');
+                $this->error($exception->getMessage());
+
+                return self::FAILURE;
+            }
+
             $this->warn('RESULT=REJECTED');
 
             return self::FAILURE;
 
         } catch (Throwable $exception) {
 
-            // Une erreur technique ne doit pas être
-            // considérée comme un refus normal.
+            // Une erreur technique n'est pas
+            // un refus métier normal.
             $this->error('RESULT=ERROR');
-
             $this->error($exception->getMessage());
 
             return self::FAILURE;
