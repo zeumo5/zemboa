@@ -1,4 +1,5 @@
 <?php
+
 namespace Tests\Feature;
 
 
@@ -22,6 +23,18 @@ class ResolveMobileMoneyReconciliationRollbackTest extends TestCase
 
     public function test_resolution_and_event_are_rolled_back_together(): void
     {
+
+
+        $this->assertSame('testing', app()->environment());
+
+        $this->assertSame('sqlite', DB::getDriverName());
+
+        $this->assertSame(
+            ':memory:',
+            DB::connection()->getDatabaseName()
+        );
+
+
         // 1. Créer une boutique.
         $store = Store::create([
             'name' => 'Boutique Rollback Test',
@@ -103,6 +116,68 @@ class ResolveMobileMoneyReconciliationRollbackTest extends TestCase
 
         $case->save();
 
+
+        // Simuler une véritable erreur SQL
+        // lors de l'enregistrement de RESOLVED.
+        DB::unprepared(<<<'SQL'
+CREATE TEMP TRIGGER force_resolved_event_failure
+BEFORE INSERT ON mobile_money_reconciliation_events
+WHEN NEW.event_type = 'RESOLVED'
+BEGIN
+    SELECT RAISE(
+        ABORT,
+        'SIMULATED_RESOLVED_EVENT_FAILURE'
+    );
+END;
+SQL);
+
+        try {
+            try {
+                app(
+                    ResolveMobileMoneyReconciliationCase::class
+                )->execute(
+                    $case->id,
+                    'Simulation d une erreur SQL sur RESOLVED.'
+                );
+
+                $this->fail(
+                    'Une erreur SQL était attendue.'
+                );
+
+            } catch (
+                \Illuminate\Database\QueryException $exception
+            ) {
+                $this->assertStringContainsString(
+                    'SIMULATED_RESOLVED_EVENT_FAILURE',
+                    $exception->getMessage()
+                );
+            }
+        } finally {
+            DB::unprepared(
+                'DROP TRIGGER IF EXISTS force_resolved_event_failure'
+            );
+        }
+
+        // Le dossier doit rester ouvert après l'échec.
+        $this->assertSame(
+            'OPEN',
+            $case->fresh()->status
+        );
+
+        $this->assertNull($case->fresh()->resolved_at);
+        $this->assertNull($case->fresh()->resolved_by);
+        $this->assertNull($case->fresh()->resolution_notes);
+
+        // Aucun événement RESOLVED conservé.
+        $this->assertSame(
+            0,
+            DB::table('mobile_money_reconciliation_events')
+                ->where('reconciliation_case_id', $case->id)
+                ->where('event_type', 'RESOLVED')
+                ->count()
+        );
+
+
         $notes = 'Dossier examiné avec simulation de rollback SQL.';
 
         // 5. Simuler une erreur avant le COMMIT
@@ -146,7 +221,6 @@ class ResolveMobileMoneyReconciliationRollbackTest extends TestCase
             $this->fail(
                 'La transaction aurait dû échouer.'
             );
-
         } catch (\RuntimeException $exception) {
             $this->assertSame(
                 'SIMULATED_TRANSACTION_FAILURE',
