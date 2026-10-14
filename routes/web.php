@@ -1,6 +1,9 @@
 <?php
 
 
+
+use App\Http\Controllers\PublicCheckoutController;
+use App\Http\Controllers\PublicCartController;
 use App\Http\Controllers\PublicCatalogController;
 use App\Http\Controllers\StoreSettingController;
 use App\Http\Controllers\MobileMoneyReconciliationController;
@@ -81,11 +84,11 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/customers/{customer}', [CustomerController::class, 'show'])
         ->name('customers.show');
 
-        Route::post('/customers', [CustomerController::class, 'store'])
-    ->name('customers.store');
+    Route::post('/customers', [CustomerController::class, 'store'])
+        ->name('customers.store');
 
     Route::patch('/customers/{customer}', [CustomerController::class, 'update'])
-    ->name('customers.update');
+        ->name('customers.update');
 
     // Réconciliation Mobile Money
     // Consultation des dossiers de la boutique.
@@ -101,7 +104,7 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         '/payments/reconciliations/{caseId}',
         [MobileMoneyReconciliationController::class, 'show']
     )->whereNumber('caseId')
-     ->name('payments.reconciliations.show');
+        ->name('payments.reconciliations.show');
 
 
     // Clôturer administrativement un dossier
@@ -110,7 +113,7 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         '/payments/reconciliations/{caseId}/resolve',
         [MobileMoneyReconciliationController::class, 'resolve']
     )->whereNumber('caseId')
-     ->name('payments.reconciliations.resolve');
+        ->name('payments.reconciliations.resolve');
 
 
     // Paramètres de la boutique courante
@@ -124,7 +127,6 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         '/store/settings',
         [StoreSettingController::class, 'update']
     )->name('store.settings.update');
-
 });
 
 
@@ -162,4 +164,43 @@ Route::prefix('shops/{shopSlug}')
         )
             ->whereNumber('product')
             ->name('products.show');
+
+
+        // Panier client public
+
+        Route::get(
+            '/cart',
+            [PublicCartController::class, 'index']
+        )->name('cart.index');
+
+        Route::post(
+            '/cart/items',
+            [PublicCartController::class, 'store']
+        )->name('cart.store');
+
+        Route::patch(
+            '/cart/items/{variantId}',
+            [PublicCartController::class, 'update']
+        )
+            ->whereNumber('variantId')
+            ->name('cart.update');
+
+        Route::delete(
+            '/cart/items/{variantId}',
+            [PublicCartController::class, 'destroy']
+        )
+            ->whereNumber('variantId')
+            ->name('cart.destroy');
+
+        Route::delete(
+            '/cart',
+            [PublicCartController::class, 'clear']
+        )->name('cart.clear');
+
+        Route::post(
+            '/checkout',
+            [PublicCheckoutController::class, 'store']
+        )
+            ->block(30, 10)
+            ->name('checkout.store');
     });
