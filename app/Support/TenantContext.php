@@ -21,6 +21,13 @@ class TenantContext
         $this->store = $user->store;
     }
 
+
+    public function setFromStore(Store $store): void
+    {
+        $this->store = $store;
+    }
+
+
     public function store(): Store
     {
         if ($this->store === null) {

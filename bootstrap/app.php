@@ -1,5 +1,7 @@
 <?php
 
+
+use App\Http\Middleware\SetPublicTenantContext;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use App\Http\Middleware\SetTenantContext;
 use Illuminate\Foundation\Application;
@@ -13,16 +15,20 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
-    ->withMiddleware(function (Middleware $middleware): void {
+
+->withMiddleware(function (Middleware $middleware): void {
     $middleware->alias([
         'tenant' => SetTenantContext::class,
+        'public.tenant' => SetPublicTenantContext::class,
     ]);
 
     $middleware->priority([
         SetTenantContext::class,
+        SetPublicTenantContext::class,
         SubstituteBindings::class,
     ]);
 })
+
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),

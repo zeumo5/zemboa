@@ -1,5 +1,7 @@
 <?php
 
+
+use App\Http\Controllers\PublicCatalogController;
 use App\Http\Controllers\StoreSettingController;
 use App\Http\Controllers\MobileMoneyReconciliationController;
 use App\Http\Controllers\CustomerController;
@@ -124,3 +126,40 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     )->name('store.settings.update');
 
 });
+
+
+/*
+|--------------------------------------------------------------------------
+| Catalogue public des boutiques ZEMBOA
+|--------------------------------------------------------------------------
+| Accessible sans authentification.
+| Chaque requête est limitée à une boutique active.
+*/
+
+Route::prefix('shops/{shopSlug}')
+    ->middleware('public.tenant')
+    ->name('public.shops.')
+    ->group(function () {
+
+        Route::get(
+            '/',
+            [PublicCatalogController::class, 'shop']
+        )->name('show');
+
+        Route::get(
+            '/categories',
+            [PublicCatalogController::class, 'categories']
+        )->name('categories');
+
+        Route::get(
+            '/products',
+            [PublicCatalogController::class, 'products']
+        )->name('products');
+
+        Route::get(
+            '/products/{product}',
+            [PublicCatalogController::class, 'product']
+        )
+            ->whereNumber('product')
+            ->name('products.show');
+    });
