@@ -2,6 +2,8 @@
 
 namespace App\Actions\ProductVariant;
 
+
+use App\Models\StoreSetting;
 use App\Models\StockLevel;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
@@ -89,12 +91,18 @@ if (
 
    $variant = ProductVariant::create($data);
 
+
+$lowStockThreshold = (int) (
+    StoreSetting::query()->value('low_stock_threshold') ?? 5
+);
+
 StockLevel::create([
     'product_variant_id' => $variant->id,
     'physical_quantity' => 0,
     'reserved_quantity' => 0,
-    'low_stock_threshold' => 5,
+    'low_stock_threshold' => $lowStockThreshold,
 ]);
+
 
 return $variant;
 });

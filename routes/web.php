@@ -1,6 +1,6 @@
 <?php
 
-
+use App\Http\Controllers\StoreSettingController;
 use App\Http\Controllers\MobileMoneyReconciliationController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\StockController;
@@ -111,5 +111,16 @@ Route::middleware(['auth', 'tenant'])->group(function () {
      ->name('payments.reconciliations.resolve');
 
 
+    // Paramètres de la boutique courante
+
+    Route::get(
+        '/store/settings',
+        [StoreSettingController::class, 'show']
+    )->name('store.settings.show');
+
+    Route::patch(
+        '/store/settings',
+        [StoreSettingController::class, 'update']
+    )->name('store.settings.update');
 
 });

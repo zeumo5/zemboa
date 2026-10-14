@@ -15,9 +15,15 @@ class RolePermissionSeeder extends Seeder
     {
         $storeOwner = Role::where('code', 'STORE_OWNER')->firstOrFail();
 
+
         $storeOwnerPermissions = Permission::whereIn('code', [
             'store.view',
             'store.update',
+
+            // Paramètres de la boutique
+            'settings.view',
+            'settings.update',
+
 
             'categories.view',
             'categories.create',

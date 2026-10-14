@@ -67,6 +67,18 @@ class PermissionSeeder extends Seeder
                 'code' => 'payments.reconciliation.resolve',
             ],
 
+
+            // Paramètres de la boutique
+            [
+                'name' => 'Consulter les paramètres de la boutique',
+                'code' => 'settings.view',
+            ],
+            [
+                'name' => 'Modifier les paramètres de la boutique',
+                'code' => 'settings.update',
+            ],
+
+
         ];
 
         foreach ($permissions as $permission) {

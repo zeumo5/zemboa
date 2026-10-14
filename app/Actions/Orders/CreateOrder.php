@@ -2,7 +2,7 @@
 
 namespace App\Actions\Orders;
 
-
+use App\Models\StoreSetting;
 use App\Models\DeliveryZone;
 use App\Actions\Customers\FindOrCreateCustomer;
 use App\Actions\Stock\CreateStockReservation;
@@ -109,6 +109,33 @@ class CreateOrder
             $deliveryArea,
             $deliveryInstructions,
         ) {
+
+
+            $storeSettings = StoreSetting::query()->first();
+
+            if ($storeSettings !== null) {
+                if (
+                    $fulfillmentType === 'DELIVERY'
+                    && ! $storeSettings->delivery_enabled
+                ) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'fulfillment_type' =>
+                        'La livraison est désactivée pour cette boutique.',
+                    ]);
+                }
+
+                if (
+                    $fulfillmentType === 'PICKUP'
+                    && ! $storeSettings->pickup_enabled
+                ) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'fulfillment_type' =>
+                        'Le retrait en boutique est désactivé.',
+                    ]);
+                }
+            }
+
+
             $customer = $this->findOrCreateCustomer->execute(
                 name: $customerName,
                 phone: $customerPhone,
@@ -181,7 +208,15 @@ class CreateOrder
                 deliveryFee: $deliveryFee,
             );
 
-            $reservationExpiresAt = now()->addMinutes(30);
+
+            $reservationMinutes = $storeSettings
+                ? $storeSettings->reservation_duration_minutes
+                : 30;
+
+            $reservationExpiresAt = now()->addMinutes(
+                $reservationMinutes
+            );
+
 
             $order = Order::create([
                 'customer_id' => $customer->id,
