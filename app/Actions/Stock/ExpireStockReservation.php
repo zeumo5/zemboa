@@ -23,7 +23,7 @@ class ExpireStockReservation
             if ($snapshot === null) {
                 throw ValidationException::withMessages([
                     'reservation' =>
-                        'La réservation de stock est introuvable.',
+                    'La réservation de stock est introuvable.',
                 ]);
             }
 
@@ -40,7 +40,7 @@ class ExpireStockReservation
                 if ($order === null) {
                     throw ValidationException::withMessages([
                         'order' =>
-                            'La commande associée est introuvable.',
+                        'La commande associée est introuvable.',
                     ]);
                 }
             }
@@ -54,7 +54,7 @@ class ExpireStockReservation
             if ($reservation === null) {
                 throw ValidationException::withMessages([
                     'reservation' =>
-                        'La réservation de stock est introuvable.',
+                    'La réservation de stock est introuvable.',
                 ]);
             }
 
@@ -68,7 +68,7 @@ class ExpireStockReservation
                 ) {
                     throw ValidationException::withMessages([
                         'reservation' =>
-                            'La réservation ne correspond pas à cette commande.',
+                        'La réservation ne correspond pas à cette commande.',
                     ]);
                 }
 
@@ -76,13 +76,30 @@ class ExpireStockReservation
                 if ($order->payment_status !== 'UNPAID') {
                     throw ValidationException::withMessages([
                         'payment_status' =>
-                            'Une réservation liée à une commande ayant reçu un paiement ne peut pas expirer.',
+                        'Une réservation liée à une commande ayant reçu un paiement ne peut pas expirer.',
+                    ]);
+                }
+
+
+                // Empêcher l'expiration d'un stock
+                // lorsque le colis a déjà quitté la boutique.
+                // Cela protège aussi une livraison FAILED
+                // après récupération du colis.
+
+                if (
+                    $order->delivery()
+                    ->whereNotNull('picked_up_at')
+                    ->exists()
+                ) {
+                    throw ValidationException::withMessages([
+                        'delivery' =>
+                        'Impossible d’expirer cette réservation : le colis a déjà été récupéré par le livreur.',
                     ]);
                 }
             } elseif ($reservation->reference_type === 'ORDER') {
                 throw ValidationException::withMessages([
                     'reservation' =>
-                        'Le lien de la réservation a changé.',
+                    'Le lien de la réservation a changé.',
                 ]);
             }
 
@@ -93,7 +110,7 @@ class ExpireStockReservation
             ) {
                 throw ValidationException::withMessages([
                     'reservation' =>
-                        'Cette réservation n’a pas encore atteint sa date d’expiration.',
+                    'Cette réservation n’a pas encore atteint sa date d’expiration.',
                 ]);
             }
 
@@ -101,7 +118,7 @@ class ExpireStockReservation
             if ($reservation->status !== 'ACTIVE') {
                 throw ValidationException::withMessages([
                     'reservation' =>
-                        'Seule une réservation active peut expirer.',
+                    'Seule une réservation active peut expirer.',
                 ]);
             }
 
@@ -117,7 +134,7 @@ class ExpireStockReservation
             if ($stockLevel === null) {
                 throw ValidationException::withMessages([
                     'stock' =>
-                        'Le stock associé à cette réservation est introuvable.',
+                    'Le stock associé à cette réservation est introuvable.',
                 ]);
             }
 
@@ -127,7 +144,7 @@ class ExpireStockReservation
             ) {
                 throw ValidationException::withMessages([
                     'stock' =>
-                        'Le stock réservé est incohérent avec la réservation.',
+                    'Le stock réservé est incohérent avec la réservation.',
                 ]);
             }
 

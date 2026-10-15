@@ -27,9 +27,31 @@ class CancelOrder
             if ($order->payment_status !== 'UNPAID') {
                 throw ValidationException::withMessages([
                     'payment_status' =>
-                        'Une commande ayant déjà reçu un paiement ne peut pas être annulée directement.',
+                    'Une commande ayant déjà reçu un paiement ne peut pas être annulée directement.',
                 ]);
             }
+
+
+            /*
+|--------------------------------------------------------------------------
+| Protection des commandes en cours de livraison
+|--------------------------------------------------------------------------
+| Une commande ne peut plus être annulée normalement
+| lorsque son colis a déjà été récupéré par le livreur.
+| La protection reste active même après un échec de livraison.
+*/
+
+            if (
+                $order->delivery()
+                ->whereNotNull('picked_up_at')
+                ->exists()
+            ) {
+                throw ValidationException::withMessages([
+                    'delivery' =>
+                    'Impossible d’annuler cette commande : le colis a déjà été récupéré par le livreur.',
+                ]);
+            }
+
 
             $reservations = StockReservation::query()
                 ->where('reference_type', 'ORDER')

@@ -1,7 +1,7 @@
 <?php
 
 
-
+use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\PublicCheckoutController;
 use App\Http\Controllers\PublicCartController;
 use App\Http\Controllers\PublicCatalogController;
@@ -127,6 +127,52 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         '/store/settings',
         [StoreSettingController::class, 'update']
     )->name('store.settings.update');
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gestion des livraisons — ZEMBOA
+    |--------------------------------------------------------------------------
+    */
+
+    // Consulter les livraisons accessibles à l'utilisateur.
+    Route::get(
+        '/deliveries',
+        [DeliveryController::class, 'index']
+    )->name('deliveries.index');
+
+    // Consulter une livraison précise.
+    Route::get(
+        '/deliveries/{deliveryId}',
+        [DeliveryController::class, 'show']
+    )
+        ->whereNumber('deliveryId')
+        ->name('deliveries.show');
+
+    // Affecter un livreur à une commande.
+    Route::post(
+        '/orders/{orderId}/delivery/assign',
+        [DeliveryController::class, 'assign']
+    )
+        ->whereNumber('orderId')
+        ->name('deliveries.assign');
+
+    // Actualiser le statut de livraison.
+    Route::patch(
+        '/deliveries/{deliveryId}/status',
+        [DeliveryController::class, 'updateStatus']
+    )
+        ->whereNumber('deliveryId')
+        ->name('deliveries.update-status');
+
+
+    // Confirmer le retour physique d'un colis.
+    Route::patch(
+        '/deliveries/{deliveryId}/confirm-return',
+        [DeliveryController::class, 'confirmReturn']
+    )
+        ->whereNumber('deliveryId')
+        ->name('deliveries.confirm-return');
 });
 
 

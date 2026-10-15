@@ -21,16 +21,38 @@ class ExpireOrder
             if ($order->status !== 'PENDING') {
                 throw ValidationException::withMessages([
                     'status' =>
-                        'Seule une commande en attente peut expirer.',
+                    'Seule une commande en attente peut expirer.',
                 ]);
             }
 
             if ($order->payment_status !== 'UNPAID') {
                 throw ValidationException::withMessages([
                     'payment_status' =>
-                        'Seule une commande impayée peut expirer.',
+                    'Seule une commande impayée peut expirer.',
                 ]);
             }
+
+
+            /*
+|--------------------------------------------------------------------------
+| Protection des livraisons en cours
+|--------------------------------------------------------------------------
+| Une commande dont le colis a été récupéré ne doit
+| pas expirer automatiquement, même si son délai
+| de réservation est dépassé.
+*/
+
+            if (
+                $order->delivery()
+                ->whereNotNull('picked_up_at')
+                ->exists()
+            ) {
+                throw ValidationException::withMessages([
+                    'delivery' =>
+                    'Expiration impossible : le colis a déjà été récupéré par le livreur.',
+                ]);
+            }
+
 
             if (
                 $order->reservation_expires_at === null ||
@@ -38,7 +60,7 @@ class ExpireOrder
             ) {
                 throw ValidationException::withMessages([
                     'reservation_expires_at' =>
-                        'Cette commande n’a pas encore atteint sa date d’expiration.',
+                    'Cette commande n’a pas encore atteint sa date d’expiration.',
                 ]);
             }
 
