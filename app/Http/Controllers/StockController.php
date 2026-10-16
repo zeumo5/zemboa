@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+
+use App\Models\StockMovement;
 use App\Actions\Stock\AdjustStockIn;
 use App\Actions\Stock\AdjustStockOut;
 use App\Actions\Stock\ReceiveStock;
@@ -94,5 +96,25 @@ class StockController extends Controller
         return redirect()
             ->route('stock.show', $stockLevel)
             ->with('success', 'Stock ajusté à la baisse avec succès.');
+    }
+
+    public function movements(): JsonResponse
+    {
+        // Seuls les utilisateurs autorisés à consulter
+        // les stocks peuvent voir leur historique.
+        Gate::authorize('viewAny', StockLevel::class);
+
+        // BelongsToStore limite automatiquement
+        // les mouvements à la boutique active.
+        $movements = StockMovement::query()
+            ->with([
+                'creator:id,name',
+                'productVariant:id,product_id,sku',
+                'productVariant.product:id,name',
+            ])
+            ->orderByDesc('id')
+            ->paginate(30);
+
+        return response()->json($movements);
     }
 }

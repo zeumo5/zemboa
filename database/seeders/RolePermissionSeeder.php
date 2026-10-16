@@ -78,5 +78,49 @@ class RolePermissionSeeder extends Seeder
         ])->pluck('id');
 
         $deliveryAgent->permissions()->sync($deliveryAgentPermissions);
+
+        // Permissions minimales du personnel de caisse.
+        $cashier = Role::where('code', 'CASHIER')->firstOrFail();
+
+        $cashierPermissions = Permission::whereIn('code', [
+            'orders.view',
+            'payments.view',
+            'payments.confirm',
+        ])->pluck('id');
+
+        $cashier->permissions()->sync($cashierPermissions);
+
+        // Gestionnaire de boutique ZEMBOA.
+        // Gestion opérationnelle sans accès financier sensible.
+        $storeManager = Role::where('code', 'STORE_MANAGER')
+            ->firstOrFail();
+
+        $storeManagerPermissions = Permission::whereIn('code', [
+            // Catalogue
+            'categories.view',
+            'categories.create',
+            'categories.update',
+
+            'products.view',
+            'products.create',
+            'products.update',
+
+            // Stock
+            'inventory.view',
+            'inventory.manage',
+
+            // Commandes
+            'orders.view',
+            'orders.update',
+
+            // Clients
+            'customers.view',
+
+            // Livraisons
+            'deliveries.view',
+            'deliveries.update',
+        ])->pluck('id');
+
+        $storeManager->permissions()->sync($storeManagerPermissions);
     }
 }

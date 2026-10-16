@@ -1,0 +1,57 @@
+
+name: ZEMBOA Backend Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    name: Laravel 13 - PHP 8.3 - SQLite
+    runs-on: ubuntu-latest
+
+    env:
+      APP_ENV: testing
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ':memory:'
+      MAIL_MAILER: array
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, dom, xml, ctype, fileinfo, pdo_sqlite, sqlite3, bcmath, intl, zip
+          coverage: none
+          tools: composer:v2
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare Laravel environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force --no-interaction
+
+      - name: Verify database isolation
+        shell: bash
+        run: |
+          test "$DB_CONNECTION" = "sqlite"
+          test "$DB_DATABASE" = ":memory:"
+          test ! -f bootstrap/cache/config.php
+          grep -Eq 'name="DB_CONNECTION"[[:space:]]+value="sqlite"' phpunit.xml
+          grep -Eq 'name="DB_DATABASE"[[:space:]]+value=":memory:"' phpunit.xml
+
+      - name: Run Laravel tests
+        run: php artisan test --no-ansi

@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Controllers\EmployeeInvitationController;
+use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\OrderController;
 use App\Http\Controllers\RefundController;
 use App\Http\Controllers\ReturnRequestController;
 use App\Http\Controllers\DeliveryController;
@@ -67,6 +70,12 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::get('/stock', [StockController::class, 'index'])
         ->name('stock.index');
 
+    Route::get(
+        '/stock/movements',
+        [StockController::class, 'movements']
+    )->name('stock.movements');
+
+
     Route::get('/stock/{stockLevel}', [StockController::class, 'show'])
         ->name('stock.show');
 
@@ -127,6 +136,22 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         '/store/settings',
         [StoreSettingController::class, 'update']
     )->name('store.settings.update');
+
+    // Consultation des commandes ZEMBOA.
+    // Propriétaire et gestionnaire autorisés.
+
+    Route::get(
+        '/orders',
+        [OrderController::class, 'index']
+    )->name('orders.index');
+
+    Route::get(
+        '/orders/{orderId}',
+        [OrderController::class, 'show']
+    )
+        ->whereNumber('orderId')
+        ->name('orders.show');
+
 
     /*
     |--------------------------------------------------------------------------
@@ -269,8 +294,52 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     )
         ->whereNumber('refundId')
         ->name('refunds.simulate');
+
+    // Gestion des employés — propriétaire uniquement.
+
+    Route::get(
+        '/employees',
+        [EmployeeController::class, 'index']
+    )->name('employees.index');
+
+    Route::post(
+        '/employees',
+        [EmployeeController::class, 'store']
+    )->name('employees.store');
+
+    Route::patch(
+        '/employees/{employeeId}/role',
+        [EmployeeController::class, 'updateRole']
+    )
+        ->whereNumber('employeeId')
+        ->name('employees.update-role');
+
+    Route::patch(
+        '/employees/{employeeId}/status',
+        [EmployeeController::class, 'updateStatus']
+    )
+        ->whereNumber('employeeId')
+        ->name('employees.update-status');
 });
 
+/*
+|--------------------------------------------------------------------------
+| Invitations des employés ZEMBOA
+|--------------------------------------------------------------------------
+| Routes publiques indépendantes des boutiques.
+*/
+
+Route::get(
+    '/employee-invitations/{token}',
+    [EmployeeInvitationController::class, 'show']
+)->name('employee.invitation.form');
+
+Route::post(
+    '/employee-invitations/{token}',
+    [EmployeeInvitationController::class, 'accept']
+)
+    ->middleware('throttle:6,1')
+    ->name('employee.invitation.accept');
 
 /*
 |--------------------------------------------------------------------------

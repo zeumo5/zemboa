@@ -1068,4 +1068,194 @@ class AssignDeliveryAgentTest extends TestCase
         $this->assertSame(0, $stock->fresh()->reserved_quantity);
         $this->assertSame(10, $stock->fresh()->physical_quantity);
     }
+
+    /*
+|--------------------------------------------------------------------------
+| Audit STORE_MANAGER - ZEMBOA
+|--------------------------------------------------------------------------
+*/
+
+    private function authenticateStoreManager(User $owner): User
+    {
+        $this->seed(\Database\Seeders\DatabaseSeeder::class);
+
+        $manager = User::factory()->create([
+            'store_id' => $owner->store_id,
+            'status' => 'ACTIVE',
+        ]);
+
+        $role = Role::where('code', 'STORE_MANAGER')
+            ->firstOrFail();
+
+        $manager->roles()->attach($role->id);
+
+        $this->actingAs($manager);
+
+        app(TenantContext::class)->setFromUser($manager);
+
+        return $manager;
+    }
+
+    // 1. Le gestionnaire peut affecter un livreur.
+    public function test_manager_can_assign_delivery_agent_http(): void
+    {
+        [$order, $owner, $agent] =
+            $this->prepareStore('manager-assign');
+
+        $this->authenticateStoreManager($owner);
+
+        $this->postJson(route('deliveries.assign', [
+            'orderId' => $order->id,
+        ]), [
+            'assigned_to' => $agent->id,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('delivery.assigned_to', $agent->id)
+            ->assertJsonPath('delivery.status', 'ASSIGNED');
+
+        $this->assertDatabaseCount('deliveries', 1);
+    }
+
+    // 2. Le gestionnaire voit sa boutique, pas les autres.
+    public function test_manager_delivery_visibility_is_tenant_scoped(): void
+    {
+        [$orderA, $ownerA, $agentA] =
+            $this->prepareStore('manager-alpha');
+
+        $deliveryA = $this->assign($orderA, $agentA);
+
+        [$orderB, $ownerB, $agentB] =
+            $this->prepareStore('manager-beta');
+
+        $deliveryB = $this->assign($orderB, $agentB);
+
+        $this->authenticateStoreManager($ownerA);
+
+        $this->getJson(route('deliveries.index'))
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $deliveryA->id);
+
+        $this->getJson(route('deliveries.show', [
+            'deliveryId' => $deliveryA->id,
+        ]))
+            ->assertOk()
+            ->assertJsonPath('delivery.id', $deliveryA->id);
+
+        $this->getJson(route('deliveries.show', [
+            'deliveryId' => $deliveryB->id,
+        ]))->assertNotFound();
+    }
+
+    // 3. Le gestionnaire ne remplace pas le livreur
+    // et ne confirme pas les retours physiques.
+    public function test_manager_cannot_perform_restricted_delivery_actions(): void
+    {
+        [$order, $owner, $agent] =
+            $this->prepareStore('manager-restricted');
+
+        $delivery = $this->assign($order, $agent);
+
+        $this->authenticateStoreManager($owner);
+
+        $this->patchJson(route('deliveries.update-status', [
+            'deliveryId' => $delivery->id,
+        ]), [
+            'status' => 'PICKED_UP',
+        ])->assertForbidden();
+
+        $this->patchJson(route('deliveries.confirm-return', [
+            'deliveryId' => $delivery->id,
+        ]), [
+            'return_notes' => 'Tentative gestionnaire',
+        ])->assertForbidden();
+
+        $this->assertSame(
+            'ASSIGNED',
+            $delivery->fresh()->status
+        );
+
+        $this->assertNull($delivery->fresh()->returned_at);
+    }
+
+    // 4. Un livreur inactif ne peut pas être affecté.
+    public function test_manager_cannot_assign_inactive_agent(): void
+    {
+        [$order, $owner, $agent] =
+            $this->prepareStore('manager-inactive-agent');
+
+        $agent->status = 'INACTIVE';
+        $agent->save();
+
+        $this->authenticateStoreManager($owner);
+
+        $this->postJson(route('deliveries.assign', [
+            'orderId' => $order->id,
+        ]), [
+            'assigned_to' => $agent->id,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('assigned_to');
+
+        $this->assertDatabaseCount('deliveries', 0);
+    }
+
+    // 5. Le gestionnaire ne peut pas affecter
+    // un livreur provenant d'une autre boutique.
+    public function test_manager_cannot_assign_foreign_store_agent(): void
+    {
+        [$orderA, $ownerA] =
+            $this->prepareStore('manager-store-a');
+
+        [$orderB, $ownerB, $agentB] =
+            $this->prepareStore('manager-store-b');
+
+        $this->authenticateStoreManager($ownerA);
+
+        $this->postJson(route('deliveries.assign', [
+            'orderId' => $orderA->id,
+        ]), [
+            'assigned_to' => $agentB->id,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('assigned_to');
+
+        $this->assertDatabaseCount('deliveries', 0);
+    }
+
+    // 6. Une caissière ne peut pas superviser
+    // ni affecter les livraisons.
+    public function test_cashier_cannot_manage_deliveries(): void
+    {
+        [$order, $owner, $agent] =
+            $this->prepareStore('cashier-delivery-denied');
+
+        $this->seed(\Database\Seeders\DatabaseSeeder::class);
+
+        $cashier = User::factory()->create([
+            'store_id' => $owner->store_id,
+            'status' => 'ACTIVE',
+        ]);
+
+        $cashierRole = Role::where('code', 'CASHIER')
+            ->firstOrFail();
+
+        $cashier->roles()->attach($cashierRole->id);
+
+        $this->actingAs($cashier);
+
+        app(TenantContext::class)->setFromUser($cashier);
+
+        $this->getJson(route('deliveries.index'))
+            ->assertForbidden();
+
+        $this->postJson(route('deliveries.assign', [
+            'orderId' => $order->id,
+        ]), [
+            'assigned_to' => $agent->id,
+        ])->assertForbidden();
+
+        $this->assertDatabaseCount('deliveries', 0);
+    }
+
 }
