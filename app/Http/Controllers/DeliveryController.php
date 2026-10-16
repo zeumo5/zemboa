@@ -23,10 +23,15 @@ class DeliveryController extends Controller
         $query = Delivery::query()
             ->where('store_id', $user->store_id);
 
-        // Un livreur voit uniquement ses livraisons.
-        if (! $user->hasRole('STORE_OWNER')) {
+
+        if (
+            ! $user->hasRole('STORE_OWNER') &&
+            ! $user->hasRole('STORE_MANAGER')
+        ) {
+            // Le livreur voit uniquement ses livraisons.
             $query->where('assigned_to', $user->id);
         }
+
 
         return response()->json(
             $query->orderByDesc('id')->paginate(20)
@@ -45,9 +50,16 @@ class DeliveryController extends Controller
         $query = Delivery::query()
             ->where('store_id', $user->store_id);
 
-        if (! $user->hasRole('STORE_OWNER')) {
+
+        if (
+            ! $user->hasRole('STORE_OWNER') &&
+            ! $user->hasRole('STORE_MANAGER')
+        ) {
+            // Seul le livreur est limité
+            // aux livraisons qui lui sont attribuées.
             $query->where('assigned_to', $user->id);
         }
+
 
         $delivery = $query
             ->whereKey($deliveryId)
@@ -125,6 +137,7 @@ class DeliveryController extends Controller
     /**
      * Autorisation de consultation.
      */
+
     private function authorizeViewer(Request $request): User
     {
         $user = $request->user();
@@ -135,6 +148,7 @@ class DeliveryController extends Controller
             ! $user->hasPermission('deliveries.view') ||
             (
                 ! $user->hasRole('STORE_OWNER') &&
+                ! $user->hasRole('STORE_MANAGER') &&
                 ! $user->hasRole('DELIVERY_AGENT')
             )
         ) {
@@ -145,6 +159,7 @@ class DeliveryController extends Controller
 
         return $user;
     }
+
 
 
     /**

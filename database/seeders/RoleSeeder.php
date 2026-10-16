@@ -26,5 +26,15 @@ class RoleSeeder extends Seeder
             ['code' => 'DELIVERY_AGENT'],
             ['name' => 'Agent de livraison']
         );
+
+        Role::updateOrCreate(
+            ['code' => 'CASHIER'],
+            ['name' => 'Caissier / Caissière']
+        );
+
+        Role::updateOrCreate(
+            ['code' => 'STORE_MANAGER'],
+            ['name' => 'Gestionnaire de boutique']
+        );
     }
 }

@@ -119,12 +119,20 @@ class ConfirmPayment
                 );
             }
 
-            // Vérifier la permission RBAC.
-            if (!$cashier->hasPermission('payments.confirm')) {
+            //
+            // Autorisation de confirmation en caisse.
+            // Un livreur ne peut pas confirmer un paiement CASH,
+            // même s'il possède accidentellement une permission
+            // de confirmation attribuée par un autre rôle.
+            if (
+                !$cashier->hasPermission('payments.confirm') ||
+                $cashier->hasRole('DELIVERY_AGENT')
+            ) {
                 throw new AuthorizationException(
-                    'Vous n’avez pas la permission de confirmer un paiement.'
+                    'Vous ne pouvez pas confirmer ce paiement.'
                 );
             }
+
 
 
 

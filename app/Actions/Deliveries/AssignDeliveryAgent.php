@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Actions\Deliveries;
 
 
@@ -23,7 +24,12 @@ final class AssignDeliveryAgent
         if (
             ! $currentUser instanceof User ||
             (int) $currentUser->store_id !== $storeId ||
-            ! $currentUser->hasRole('STORE_OWNER') ||
+
+            !(
+                $currentUser->hasRole('STORE_OWNER') ||
+                $currentUser->hasRole('STORE_MANAGER')
+            ) ||
+
             ! $currentUser->hasPermission('deliveries.update')
         ) {
             throw new AuthorizationException(
@@ -46,14 +52,14 @@ final class AssignDeliveryAgent
             if ($order->fulfillment_type !== 'DELIVERY') {
                 throw ValidationException::withMessages([
                     'order' =>
-                        'Cette commande est prévue pour un retrait en boutique.',
+                    'Cette commande est prévue pour un retrait en boutique.',
                 ]);
             }
 
             if ($order->status !== 'PENDING') {
                 throw ValidationException::withMessages([
                     'order' =>
-                        'Cette commande ne peut plus être affectée.',
+                    'Cette commande ne peut plus être affectée.',
                 ]);
             }
 
@@ -68,7 +74,7 @@ final class AssignDeliveryAgent
             ) {
                 throw ValidationException::withMessages([
                     'order' =>
-                        'La réservation de cette commande a expiré.',
+                    'La réservation de cette commande a expiré.',
                 ]);
             }
 
@@ -78,26 +84,28 @@ final class AssignDeliveryAgent
                 ->whereKey($deliveryAgentId)
                 ->first();
 
+
             if (
                 $agent === null ||
+                $agent->status !== 'ACTIVE' ||
                 ! $agent->hasRole('DELIVERY_AGENT') ||
                 ! $agent->hasPermission('deliveries.update')
             ) {
                 throw ValidationException::withMessages([
                     'assigned_to' =>
-                        'Le livreur sélectionné est invalide ou non autorisé.',
+                    'Le livreur sélectionné est invalide ou non autorisé.',
                 ]);
             }
 
             // Une commande ne doit pas avoir deux livraisons.
             if (
                 Delivery::query()
-                    ->where('order_id', $order->id)
-                    ->exists()
+                ->where('order_id', $order->id)
+                ->exists()
             ) {
                 throw ValidationException::withMessages([
                     'delivery' =>
-                        'Cette commande possède déjà une livraison.',
+                    'Cette commande possède déjà une livraison.',
                 ]);
             }
 
