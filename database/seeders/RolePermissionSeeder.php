@@ -48,6 +48,14 @@ class RolePermissionSeeder extends Seeder
             'deliveries.view',
             'deliveries.update',
 
+            // Retours après-vente
+            'returns.view',
+            'returns.manage',
+
+            // Remboursements
+            'refunds.view',
+            'refunds.manage',
+
 
             // Paiements
             'payments.view',

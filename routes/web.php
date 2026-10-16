@@ -1,6 +1,7 @@
 <?php
 
-
+use App\Http\Controllers\RefundController;
+use App\Http\Controllers\ReturnRequestController;
 use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\PublicCheckoutController;
 use App\Http\Controllers\PublicCartController;
@@ -106,7 +107,6 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     )->whereNumber('caseId')
         ->name('payments.reconciliations.show');
 
-
     // Clôturer administrativement un dossier
     // de réconciliation Mobile Money.
     Route::patch(
@@ -127,7 +127,6 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         '/store/settings',
         [StoreSettingController::class, 'update']
     )->name('store.settings.update');
-
 
     /*
     |--------------------------------------------------------------------------
@@ -165,7 +164,6 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->whereNumber('deliveryId')
         ->name('deliveries.update-status');
 
-
     // Confirmer le retour physique d'un colis.
     Route::patch(
         '/deliveries/{deliveryId}/confirm-return',
@@ -173,6 +171,104 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     )
         ->whereNumber('deliveryId')
         ->name('deliveries.confirm-return');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Retours SAV — ZEMBOA
+    |--------------------------------------------------------------------------
+    */
+
+    // Liste des demandes de retour.
+    Route::get(
+        '/returns',
+        [ReturnRequestController::class, 'index']
+    )->name('returns.index');
+
+    // Consulter une demande de retour.
+    Route::get(
+        '/returns/{returnRequestId}',
+        [ReturnRequestController::class, 'show']
+    )
+        ->whereNumber('returnRequestId')
+        ->name('returns.show');
+
+    // Créer une demande de retour.
+    Route::post(
+        '/returns',
+        [ReturnRequestController::class, 'store']
+    )->name('returns.store');
+
+    // Approuver ou rejeter une demande de retour.
+    Route::patch(
+        '/returns/{returnRequestId}/review',
+        [ReturnRequestController::class, 'review']
+    )
+        ->whereNumber('returnRequestId')
+        ->name('returns.review');
+
+    // Confirmer la réception physique d'un retour.
+    Route::patch(
+        '/returns/{returnRequestId}/receive',
+        [ReturnRequestController::class, 'receive']
+    )
+        ->whereNumber('returnRequestId')
+        ->name('returns.receive');
+
+    // Inspecter les articles retournés.
+    Route::patch(
+        '/returns/{returnRequestId}/inspect',
+        [ReturnRequestController::class, 'inspect']
+    )
+        ->whereNumber('returnRequestId')
+        ->name('returns.inspect');
+
+
+    // Remettre en stock les articles revendables.
+    Route::patch(
+        '/returns/{returnRequestId}/restock',
+        [ReturnRequestController::class, 'restock']
+    )
+        ->whereNumber('returnRequestId')
+        ->name('returns.restock');
+
+    // Préparer un remboursement simulé
+    // après inspection du retour.
+    Route::post(
+        '/returns/{returnRequestId}/refund',
+        [RefundController::class, 'store']
+    )
+        ->whereNumber('returnRequestId')
+        ->name('refunds.prepare');
+
+    // Approuver un remboursement simulé.
+    Route::patch(
+        '/refunds/{refundId}/approve',
+        [RefundController::class, 'approve']
+    )
+        ->whereNumber('refundId')
+        ->name('refunds.approve');
+
+    // Liste des remboursements de la boutique.
+    Route::get(
+        '/refunds',
+        [RefundController::class, 'index']
+    )->name('refunds.index');
+
+    // Détails d'un remboursement.
+    Route::get(
+        '/refunds/{refundId}',
+        [RefundController::class, 'show']
+    )
+        ->whereNumber('refundId')
+        ->name('refunds.show');
+
+    // Simulation finale, sans transfert financier.
+    Route::patch(
+        '/refunds/{refundId}/simulate',
+        [RefundController::class, 'simulate']
+    )
+        ->whereNumber('refundId')
+        ->name('refunds.simulate');
 });
 
 
@@ -210,7 +306,6 @@ Route::prefix('shops/{shopSlug}')
         )
             ->whereNumber('product')
             ->name('products.show');
-
 
         // Panier client public
 

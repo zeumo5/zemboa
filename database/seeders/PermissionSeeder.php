@@ -47,6 +47,26 @@ class PermissionSeeder extends Seeder
             ['name' => 'Voir les livraisons', 'code' => 'deliveries.view'],
             ['name' => 'Modifier les livraisons', 'code' => 'deliveries.update'],
 
+            // Retours après-vente
+            [
+                'name' => 'Consulter les demandes de retour',
+                'code' => 'returns.view',
+            ],
+            [
+                'name' => 'Gérer les demandes de retour',
+                'code' => 'returns.manage',
+            ],
+
+            // Remboursements
+            [
+                'name' => 'Consulter les remboursements',
+                'code' => 'refunds.view',
+            ],
+            [
+                'name' => 'Gérer les remboursements',
+                'code' => 'refunds.manage',
+            ],
+
             // Paiements
 
             // Paiements
