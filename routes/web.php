@@ -1,5 +1,7 @@
 <?php
 
+
+use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\EmployeeInvitationController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\OrderController;
@@ -18,11 +20,39 @@ use App\Http\Controllers\ProductController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CategoryController;
 
+
 Route::get('/', function () {
     return view('welcome');
 });
 
+// Authentification des utilisateurs des boutiques.
+
+Route::get(
+    '/login',
+    [SessionController::class, 'create']
+)->name('login');
+
+Route::post(
+    '/login',
+    [SessionController::class, 'store']
+)
+    ->middleware('throttle:5,1')
+    ->name('login.store');
+
+Route::post(
+    '/logout',
+    [SessionController::class, 'destroy']
+)
+    ->middleware('auth')
+    ->name('logout');
+
 Route::middleware(['auth', 'tenant'])->group(function () {
+
+    Route::get(
+        '/account',
+        [SessionController::class, 'me']
+    )->name('account.show');
+
     Route::get('/categories', [CategoryController::class, 'index'])
         ->name('categories.index');
 
