@@ -41,7 +41,9 @@ class SetTenantContext
             abort(403, 'Aucune boutique associée.');
         }
 
-        $store = $user->store;
+        // Relire l'état actuel de la boutique depuis la base.
+// Ne pas réutiliser une relation Eloquent en cache.
+$store = $user->store()->first();
 
         if ($store === null) {
             abort(403, 'Boutique introuvable.');
