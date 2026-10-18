@@ -1,6 +1,10 @@
 <?php
 
 
+use App\Http\Controllers\Admin\SendOwnerInvitationController;
+use App\Http\Controllers\OwnerInvitationController;
+use App\Http\Controllers\Admin\StoreController as AdminStoreController;
+use App\Http\Controllers\Admin\Auth\AdminSessionController;
 use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\EmployeeInvitationController;
 use App\Http\Controllers\EmployeeController;
@@ -45,6 +49,89 @@ Route::post(
 )
     ->middleware('auth')
     ->name('logout');
+
+// Administration générale de ZEMBOA.
+// Indépendante des boutiques commerçantes.
+
+Route::prefix('admin')
+    ->name('admin.')
+    ->group(function () {
+
+        Route::get(
+            '/login',
+            [AdminSessionController::class, 'create']
+        )->name('login');
+
+        Route::post(
+            '/login',
+            [AdminSessionController::class, 'store']
+        )
+            ->middleware('throttle:5,1')
+            ->name('login.store');
+
+        Route::post(
+            '/logout',
+            [AdminSessionController::class, 'destroy']
+        )
+            ->middleware('auth')
+            ->name('logout');
+
+        Route::middleware(['auth', 'admin'])
+            ->group(function () {
+
+                Route::get(
+                    '/',
+                    [AdminSessionController::class, 'dashboard']
+                )->name('dashboard');
+
+                // Gestion des boutiques par le super administrateur.
+
+                Route::get(
+                    '/stores',
+                    [AdminStoreController::class, 'index']
+                )->name('stores.index');
+
+                Route::post(
+                    '/stores',
+                    [AdminStoreController::class, 'store']
+                )->name('stores.store');
+
+                Route::post(
+                    '/stores/{storeId}/owner-invitation',
+                    SendOwnerInvitationController::class
+                )
+                    ->whereNumber('storeId')
+                    ->middleware('throttle:3,1')
+                    ->name('stores.owner-invitation.send');
+
+                // Consulter les détails d'une boutique.
+
+                Route::get(
+                    '/stores/{storeId}',
+                    [AdminStoreController::class, 'show']
+                )
+                    ->whereNumber('storeId')
+                    ->name('stores.show');
+
+                // Activer ou suspendre une boutique.
+
+                Route::patch(
+                    '/stores/{storeId}/status',
+                    [AdminStoreController::class, 'updateStatus']
+                )
+                    ->whereNumber('storeId')
+                    ->name('stores.update-status');
+
+                // Historique des décisions administratives.
+
+                Route::get(
+                    '/stores/{storeId}/status-events',
+                    [AdminStoreController::class, 'statusEvents']
+                )
+                    ->whereNumber('storeId')
+                    ->name('stores.status-events.index');
+            });
+    });
 
 Route::middleware(['auth', 'tenant'])->group(function () {
 
@@ -370,6 +457,21 @@ Route::post(
 )
     ->middleware('throttle:6,1')
     ->name('employee.invitation.accept');
+
+// Invitation des propriétaires de boutiques.
+
+Route::get(
+    '/owner-invitations/{token}',
+    [OwnerInvitationController::class, 'show']
+)->name('owner.invitation.form');
+
+Route::post(
+    '/owner-invitations/{token}',
+    [OwnerInvitationController::class, 'accept']
+)
+    ->middleware('throttle:6,1')
+    ->name('owner.invitation.accept');
+
 
 /*
 |--------------------------------------------------------------------------

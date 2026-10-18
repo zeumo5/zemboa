@@ -1,6 +1,6 @@
 <?php
 
-
+use App\Http\Middleware\EnsureSuperAdmin;
 use App\Http\Middleware\SetPublicTenantContext;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use App\Http\Middleware\SetTenantContext;
@@ -17,10 +17,12 @@ return Application::configure(basePath: dirname(__DIR__))
     )
 
 ->withMiddleware(function (Middleware $middleware): void {
-    $middleware->alias([
-        'tenant' => SetTenantContext::class,
-        'public.tenant' => SetPublicTenantContext::class,
-    ]);
+
+$middleware->alias([
+    'tenant' => SetTenantContext::class,
+    'public.tenant' => SetPublicTenantContext::class,
+    'admin' => EnsureSuperAdmin::class,
+]);
 
     $middleware->priority([
         SetTenantContext::class,
