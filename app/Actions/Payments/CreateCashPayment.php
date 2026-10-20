@@ -1,7 +1,10 @@
 <?php
+
 namespace App\Actions\Payments;
 
 
+use App\Models\PosRegister;
+use App\Models\PosSession;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
@@ -20,7 +23,8 @@ final class CreateCashPayment
     public function execute(
         int $orderId,
         string $amount,
-        string $cashReceived
+        string $cashReceived,
+        ?int $posSessionId = null
     ): Payment {
         $storeId = app(TenantContext::class)->storeId();
         $cashier = auth()->user();
@@ -31,8 +35,8 @@ final class CreateCashPayment
             (int) $cashier->store_id !== (int) $storeId ||
             ! $cashier->hasPermission('payments.confirm') ||
             $cashier->roles()
-                ->where('code', 'DELIVERY_AGENT')
-                ->exists()
+            ->where('code', 'DELIVERY_AGENT')
+            ->exists()
         ) {
             throw new AuthorizationException(
                 'Vous ne pouvez pas enregistrer ce paiement.'
@@ -43,14 +47,96 @@ final class CreateCashPayment
             $orderId,
             $amount,
             $cashReceived,
-            $storeId
+            $storeId,
+            $posSessionId,
+            $cashier
         ) {
+
+            $posSession = null;
+
+            if ($posSessionId !== null) {
+                $supervisor = $cashier->roles()
+                    ->whereIn('code', [
+                        'STORE_OWNER',
+                        'STORE_MANAGER',
+                    ])->exists();
+
+                $cashierRole = $cashier->hasRole('CASHIER');
+
+                $forbiddenRole = $cashier->roles()
+                    ->whereIn('code', [
+                        'DELIVERY_AGENT',
+                        'SUPER_ADMIN',
+                    ])->exists();
+
+                if (
+                    $cashier->status !== 'ACTIVE' ||
+                    $cashier->store()->value('status') !== 'ACTIVE' ||
+                    (! $supervisor && ! $cashierRole) ||
+                    $forbiddenRole ||
+                    ! $cashier->hasPermission('pos.sales.create')
+                ) {
+                    throw new AuthorizationException(
+                        'Encaissement POS non autorisé.'
+                    );
+                }
+
+                // Verrouiller la caisse avant la commande.
+                $snapshot = PosSession::query()
+                    ->where('store_id', $storeId)
+                    ->whereKey($posSessionId)
+                    ->firstOrFail();
+
+                $register = PosRegister::query()
+                    ->where('store_id', $storeId)
+                    ->whereKey($snapshot->pos_register_id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                $posSession = PosSession::query()
+                    ->where('store_id', $storeId)
+                    ->where('pos_register_id', $register->id)
+                    ->whereKey($posSessionId)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                if (
+                    $register->status !== 'ACTIVE' ||
+                    $posSession->status !== 'OPEN' ||
+                    (int) $posSession->open_slot !== 1
+                ) {
+                    throw ValidationException::withMessages([
+                        'session' => 'La session de caisse doit être ouverte.',
+                    ]);
+                }
+
+                if (
+                    ! $supervisor &&
+                    (int) $posSession->opened_by_user_id
+                    !== (int) $cashier->id
+                ) {
+                    throw new AuthorizationException(
+                        'Cette session appartient à un autre caissier.'
+                    );
+                }
+            }
+
             // Verrouiller la commande avant les paiements.
             $order = Order::query()
                 ->where('store_id', $storeId)
                 ->whereKey($orderId)
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if (
+                $order->pos_session_id !== null &&
+                $posSession === null
+            ) {
+                throw ValidationException::withMessages([
+                    'session' =>
+                    'Une commande POS doit être encaissée dans une session de caisse ouverte.',
+                ]);
+            }
 
             if (
                 $order->status !== 'PENDING' ||
@@ -73,7 +159,7 @@ final class CreateCashPayment
             if ($pendingExists) {
                 throw ValidationException::withMessages([
                     'payment' =>
-                        'Un paiement est déjà en attente.',
+                    'Un paiement est déjà en attente.',
                 ]);
             }
 
@@ -114,7 +200,7 @@ final class CreateCashPayment
             if ($receivedCents < $paymentCents) {
                 throw ValidationException::withMessages([
                     'cash_received' =>
-                        'Montant reçu insuffisant.',
+                    'Montant reçu insuffisant.',
                 ]);
             }
 
@@ -127,7 +213,7 @@ final class CreateCashPayment
             );
 
             // Enregistrer uniquement un paiement en attente.
-            return Payment::create([
+            $payment = Payment::create([
                 'order_id' => $order->id,
                 'amount' => $amount,
                 'method' => 'CASH',
@@ -135,6 +221,13 @@ final class CreateCashPayment
                 'cash_received' => $cashReceived,
                 'change_given' => $changeGiven,
             ]);
+
+            if ($posSession !== null) {
+                $payment->pos_session_id = $posSession->id;
+                $payment->save();
+            }
+
+            return $payment->refresh();
         }, 3);
     }
 }

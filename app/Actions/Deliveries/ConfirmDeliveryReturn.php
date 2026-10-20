@@ -28,7 +28,7 @@ final class ConfirmDeliveryReturn
             ! $user->hasPermission('deliveries.update')
         ) {
             throw new AuthorizationException(
-                'Confirmation du retour non autorisée.'
+                __('deliveries.return_confirmation_denied')
             );
         }
 
@@ -37,7 +37,7 @@ final class ConfirmDeliveryReturn
         if (mb_strlen($notes) > 1000) {
             throw ValidationException::withMessages([
                 'return_notes' =>
-                    'Les observations ne doivent pas dépasser 1000 caractères.',
+                    __('deliveries.return_notes_too_long'),
             ]);
         }
 
@@ -71,7 +71,7 @@ final class ConfirmDeliveryReturn
                 (int) $delivery->store_id !== (int) $order->store_id
             ) {
                 throw ValidationException::withMessages([
-                    'delivery' => 'Livraison et commande incompatibles.',
+                    'delivery' => __('deliveries.return_delivery_order_mismatch'),
                 ]);
             }
 
@@ -80,7 +80,7 @@ final class ConfirmDeliveryReturn
                 $order->fulfillment_type !== 'DELIVERY'
             ) {
                 throw ValidationException::withMessages([
-                    'order' => 'Cette commande ne peut pas être retournée.',
+                    'order' => __('deliveries.return_order_not_eligible'),
                 ]);
             }
 
@@ -91,13 +91,13 @@ final class ConfirmDeliveryReturn
             ) {
                 throw ValidationException::withMessages([
                     'delivery' =>
-                        'Le colis doit avoir été récupéré puis déclaré en échec.',
+                        __('deliveries.return_package_must_have_failed'),
                 ]);
             }
 
             if ($delivery->returned_at !== null) {
                 throw ValidationException::withMessages([
-                    'delivery' => 'Ce retour a déjà été confirmé.',
+                    'delivery' => __('deliveries.return_already_confirmed'),
                 ]);
             }
 
@@ -107,7 +107,7 @@ final class ConfirmDeliveryReturn
                 'PAID',
             ], true)) {
                 throw ValidationException::withMessages([
-                    'payment_status' => 'Statut de paiement non pris en charge.',
+                    'payment_status' => __('deliveries.return_payment_status_unsupported'),
                 ]);
             }
 
@@ -124,7 +124,7 @@ final class ConfirmDeliveryReturn
                 ) {
                     throw ValidationException::withMessages([
                         'payment_status' =>
-                            'Un paiement confirmé nécessite un traitement financier.',
+                            __('deliveries.return_confirmed_payment_requires_review'),
                     ]);
                 }
 
@@ -145,7 +145,7 @@ final class ConfirmDeliveryReturn
                 ) {
                     throw ValidationException::withMessages([
                         'stock' =>
-                            'Réservations de stock absentes ou incohérentes.',
+                            __('deliveries.return_stock_reservations_inconsistent'),
                     ]);
                 }
 
@@ -170,7 +170,7 @@ final class ConfirmDeliveryReturn
                 ) {
                     throw ValidationException::withMessages([
                         'stock' =>
-                            'Les réservations ne correspondent pas à la commande.',
+                            __('deliveries.return_reservations_do_not_match_order'),
                     ]);
                 }
 
@@ -188,7 +188,7 @@ final class ConfirmDeliveryReturn
                         $stock->reserved_quantity < $reservation->quantity
                     ) {
                         throw ValidationException::withMessages([
-                            'stock' => 'Quantité réservée incohérente.',
+                            'stock' => __('deliveries.return_reserved_quantity_inconsistent'),
                         ]);
                     }
 

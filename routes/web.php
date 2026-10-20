@@ -1,6 +1,13 @@
 <?php
 
 
+use App\Http\Controllers\GuestLocaleController;
+use App\Http\Controllers\UserLocaleController;
+use App\Http\Controllers\StoreDocumentSettingController;
+use App\Http\Controllers\PosClosingReportController;
+use App\Http\Controllers\PosCashMovementController;
+use App\Http\Controllers\PosSessionController;
+use App\Http\Controllers\PosRegisterController;
 use App\Http\Controllers\Admin\SendOwnerInvitationController;
 use App\Http\Controllers\OwnerInvitationController;
 use App\Http\Controllers\Admin\StoreController as AdminStoreController;
@@ -24,6 +31,18 @@ use App\Http\Controllers\ProductController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CategoryController;
 
+// Choix de langue des visiteurs non connectés.
+Route::post(
+    '/locale',
+    [GuestLocaleController::class, 'update']
+)->name('guest.locale.update');
+
+// Langue personnelle de l'utilisateur.
+// Route globale, indépendante des boutiques.
+Route::middleware('auth')->patch(
+    '/account/locale',
+    [UserLocaleController::class, 'update']
+)->name('account.locale.update');
 
 Route::get('/', function () {
     return view('welcome');
@@ -437,6 +456,90 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     )
         ->whereNumber('employeeId')
         ->name('employees.update-status');
+
+    Route::get(
+        '/pos/registers',
+        [PosRegisterController::class, 'index']
+    )->name('pos.registers.index');
+
+    Route::post(
+        '/pos/registers',
+        [PosRegisterController::class, 'store']
+    )->name('pos.registers.store');
+
+    Route::patch(
+        '/pos/registers/{registerId}',
+        [PosRegisterController::class, 'update']
+    )
+        ->whereNumber('registerId')
+        ->name('pos.registers.update');
+
+    Route::patch(
+        '/pos/registers/{registerId}/status',
+        [PosRegisterController::class, 'updateStatus']
+    )
+        ->whereNumber('registerId')
+        ->name('pos.registers.update-status');
+
+    // Ouvrir une session de caisse.
+    Route::post(
+        '/pos/registers/{registerId}/sessions',
+        [PosSessionController::class, 'open']
+    )
+        ->whereNumber('registerId')
+        ->name('pos.sessions.open');
+
+    // Clôturer une session de caisse.
+    Route::post(
+        '/pos/sessions/{sessionId}/close',
+        [PosSessionController::class, 'close']
+    )
+        ->whereNumber('sessionId')
+        ->name('pos.sessions.close');
+
+    // Consulter le bilan d'une session POS.
+    Route::get(
+        '/pos/sessions/{sessionId}/balance',
+        [PosSessionController::class, 'balance']
+    )
+        ->whereNumber('sessionId')
+        ->name('pos.sessions.balance');
+
+    // Enregistrer une entrée ou sortie d'espèces.
+    Route::post(
+        '/pos/sessions/{sessionId}/cash-movements',
+        [PosCashMovementController::class, 'store']
+    )
+        ->whereNumber('sessionId')
+        ->name('pos.cash-movements.store');
+
+    // Historique des mouvements manuels d'une session POS.
+    Route::get(
+        '/pos/sessions/{sessionId}/cash-movements',
+        [PosCashMovementController::class, 'index']
+    )
+        ->whereNumber('sessionId')
+        ->name('pos.cash-movements.index');
+
+    // Rapport financier d'une session POS clôturée.
+    Route::get(
+        '/pos/sessions/{sessionId}/closing-report',
+        [PosClosingReportController::class, 'show']
+    )
+        ->whereNumber('sessionId')
+        ->name('pos.sessions.closing-report');
+
+    // Consulter les paramètres documentaires.
+    Route::get(
+        '/store/document-settings',
+        [StoreDocumentSettingController::class, 'show']
+    )->name('store.document-settings.show');
+
+    // Modifier les paramètres documentaires.
+    Route::patch(
+        '/store/document-settings',
+        [StoreDocumentSettingController::class, 'update']
+    )->name('store.document-settings.update');
 });
 
 /*
@@ -482,7 +585,10 @@ Route::post(
 */
 
 Route::prefix('shops/{shopSlug}')
-    ->middleware('public.tenant')
+    ->middleware([
+        'public.tenant',
+        \App\Http\Middleware\ApplyStoreLocale::class,
+    ])
     ->name('public.shops.')
     ->group(function () {
 

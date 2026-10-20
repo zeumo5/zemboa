@@ -66,4 +66,8 @@ class Order extends Model
             'balance_due_at' => 'datetime',
         ];
     }
+    public function posSession(): BelongsTo
+    {
+        return $this->belongsTo(PosSession::class, 'pos_session_id');
+    }
 }

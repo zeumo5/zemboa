@@ -54,7 +54,7 @@ class PublicCheckoutController extends Controller
 
         if ($items === []) {
             throw ValidationException::withMessages([
-                'cart' => 'Votre panier est vide.',
+                'cart' => __('orders.cart_empty'),
             ]);
         }
 
@@ -63,8 +63,7 @@ class PublicCheckoutController extends Controller
 
         if (! $summary['can_checkout']) {
             throw ValidationException::withMessages([
-                'cart' =>
-                    'Certains articles ne sont plus disponibles. Vérifiez votre panier.',
+                'cart' => __('orders.items_unavailable'),
             ]);
         }
 
@@ -98,7 +97,7 @@ class PublicCheckoutController extends Controller
 
         // 7. Retourner les informations nécessaires au client.
         return response()->json([
-            'message' => 'Commande créée avec succès.',
+            'message' => __('orders.created_successfully'),
             'data' => [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,

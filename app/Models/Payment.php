@@ -62,4 +62,8 @@ class Payment extends Model
             'store_payment_account_id'
         );
     }
+    public function posSession(): BelongsTo
+    {
+        return $this->belongsTo(PosSession::class, 'pos_session_id');
+    }
 }

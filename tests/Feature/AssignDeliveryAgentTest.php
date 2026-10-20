@@ -1258,4 +1258,72 @@ class AssignDeliveryAgentTest extends TestCase
         $this->assertDatabaseCount('deliveries', 0);
     }
 
+
+    public function test_invalid_delivery_transition_is_translated_in_both_languages(): void
+    {
+        [$order, $owner, $agent] =
+            $this->prepareStore('i18n-delivery');
+
+        // Le propriétaire affecte le livreur.
+        $delivery = $this->assign($order, $agent);
+
+        // Se connecter maintenant comme le livreur affecté.
+        $this->actingAs($agent);
+
+        // Activer le contexte de sa boutique.
+        app(TenantContext::class)->setFromUser($agent);
+
+        $this->assertSame(
+            'ASSIGNED',
+            $delivery->fresh()->status
+        );
+
+        $originalLocale = app()->getLocale();
+
+        try {
+            $messages = [
+                'fr' => 'Transition de livraison non autorisée.',
+                'en' => 'This delivery status transition is not allowed.',
+            ];
+
+            foreach ($messages as $locale => $expectedMessage) {
+                app()->setLocale($locale);
+
+                try {
+                    // ASSIGNED -> DELIVERED est interdit.
+                    app(UpdateDeliveryStatus::class)->execute(
+                        $delivery->id,
+                        'DELIVERED'
+                    );
+
+                    $this->fail(
+                        'La transition interdite devait être refusée.'
+                    );
+                } catch (ValidationException $exception) {
+                    $this->assertSame(
+                        [$expectedMessage],
+                        $exception->errors()['status'] ?? []
+                    );
+                }
+
+                // Une erreur ne doit jamais modifier le statut.
+                $this->assertSame(
+                    'ASSIGNED',
+                    $delivery->fresh()->status
+                );
+            }
+        } finally {
+            // Restaurer la langue initiale.
+            app()->setLocale($originalLocale);
+        }
+
+        // La commande ne doit pas être marquée comme livrée.
+        $this->assertSame(
+            'PENDING',
+            $order->fresh()->status
+        );
+
+        // Toujours une seule livraison.
+        $this->assertDatabaseCount('deliveries', 1);
+    }
 }

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Requests;
 
 
@@ -102,6 +103,14 @@ class UpdateStoreSettingRequest extends FormRequest
                 'sometimes',
                 'boolean',
             ],
+
+            'default_locale' => [
+                'sometimes',
+                'required',
+                'string',
+                'in:fr,en',
+            ],
+
         ];
     }
 }

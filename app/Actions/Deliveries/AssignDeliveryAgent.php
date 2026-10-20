@@ -33,7 +33,7 @@ final class AssignDeliveryAgent
             ! $currentUser->hasPermission('deliveries.update')
         ) {
             throw new AuthorizationException(
-                'Vous ne pouvez pas affecter un livreur.'
+               __('deliveries.assign_denied'),
             );
         }
 
@@ -52,14 +52,14 @@ final class AssignDeliveryAgent
             if ($order->fulfillment_type !== 'DELIVERY') {
                 throw ValidationException::withMessages([
                     'order' =>
-                    'Cette commande est prévue pour un retrait en boutique.',
+                    __('deliveries.pickup_order_cannot_assign'),
                 ]);
             }
 
             if ($order->status !== 'PENDING') {
                 throw ValidationException::withMessages([
                     'order' =>
-                    'Cette commande ne peut plus être affectée.',
+                   __('deliveries.order_cannot_assign'),
                 ]);
             }
 
@@ -74,7 +74,7 @@ final class AssignDeliveryAgent
             ) {
                 throw ValidationException::withMessages([
                     'order' =>
-                    'La réservation de cette commande a expiré.',
+                   __('deliveries.reservation_expired'),
                 ]);
             }
 
@@ -93,7 +93,7 @@ final class AssignDeliveryAgent
             ) {
                 throw ValidationException::withMessages([
                     'assigned_to' =>
-                    'Le livreur sélectionné est invalide ou non autorisé.',
+                   __('deliveries.agent_invalid'),
                 ]);
             }
 
@@ -105,7 +105,7 @@ final class AssignDeliveryAgent
             ) {
                 throw ValidationException::withMessages([
                     'delivery' =>
-                    'Cette commande possède déjà une livraison.',
+                   __('deliveries.delivery_already_exists'),
                 ]);
             }
 

@@ -94,7 +94,7 @@ class DeliveryController extends Controller
         );
 
         return response()->json([
-            'message' => 'Livreur affecté avec succès.',
+            'message' => __('deliveries.agent_assigned'),
             'delivery' => $delivery,
         ], 201);
     }
@@ -129,7 +129,7 @@ class DeliveryController extends Controller
         );
 
         return response()->json([
-            'message' => 'Statut de livraison mis à jour.',
+            'message' => __('deliveries.status_updated'),
             'delivery' => $delivery,
         ]);
     }
@@ -153,7 +153,7 @@ class DeliveryController extends Controller
             )
         ) {
             throw new AuthorizationException(
-                'Accès aux livraisons non autorisé.'
+                __('deliveries.access_denied')
             );
         }
 
@@ -186,7 +186,7 @@ class DeliveryController extends Controller
         );
 
         return response()->json([
-            'message' => 'Retour physique du colis confirmé.',
+            'message' => __('deliveries.return_confirmed'),
             'delivery' => $delivery,
         ]);
     }

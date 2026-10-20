@@ -28,6 +28,7 @@ use Illuminate\Database\Eloquent\Model;
 
     'notify_new_orders',
     'notify_low_stock',
+    'default_locale',
 ])]
 class StoreSetting extends Model
 {

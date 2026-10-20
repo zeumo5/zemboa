@@ -16,6 +16,8 @@ class PermissionSeeder extends Seeder
             // Boutique
             ['name' => 'Voir la boutique', 'code' => 'store.view'],
             ['name' => 'Modifier la boutique', 'code' => 'store.update'],
+            ['name' => 'Voir les paramètres documentaires', 'code' => 'store.document_settings.view'],
+            ['name' => 'Modifier les paramètres documentaires', 'code' => 'store.document_settings.update'],
 
             // Catégories
             ['name' => 'Voir les catégories', 'code' => 'categories.view'],
@@ -98,7 +100,47 @@ class PermissionSeeder extends Seeder
                 'code' => 'settings.update',
             ],
 
+            // Gestion des caisses POS
+            [
+                'name' => 'Consulter les caisses POS',
+                'code' => 'pos.registers.view',
+            ],
+            [
+                'name' => 'Gérer les caisses POS',
+                'code' => 'pos.registers.manage',
+            ],
 
+
+            // Permissions des caisses POS
+            [
+                'name' => 'Consulter les caisses POS',
+                'code' => 'pos.registers.view',
+            ],
+            [
+                'name' => 'Gérer les caisses POS',
+                'code' => 'pos.registers.manage',
+            ],
+
+            // Sessions de caisse POS
+            [
+                'name' => 'Ouvrir une session de caisse',
+                'code' => 'pos.sessions.open',
+            ],
+            [
+                'name' => 'Clôturer une session de caisse',
+                'code' => 'pos.sessions.close',
+            ],
+
+            // Ventes en caisse POS
+            [
+                'name' => 'Créer une vente en caisse',
+                'code' => 'pos.sales.create',
+            ],
+
+            [
+                'name' => 'Gérer les mouvements manuels de caisse',
+                'code' => 'pos.cash_movements.manage',
+            ],
         ];
 
         foreach ($permissions as $permission) {

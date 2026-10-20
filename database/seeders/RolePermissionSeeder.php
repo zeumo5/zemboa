@@ -66,6 +66,17 @@ class RolePermissionSeeder extends Seeder
             'payments.reconciliation.create',
             'payments.reconciliation.resolve',
 
+            'pos.registers.view',
+            'pos.registers.manage',
+
+            'pos.sessions.open',
+            'pos.sessions.close',
+            'pos.sales.create',
+            'pos.cash_movements.manage',
+
+            'store.document_settings.view',
+            'store.document_settings.update',
+
         ])->pluck('id');
 
         $storeOwner->permissions()->sync($storeOwnerPermissions);
@@ -85,7 +96,13 @@ class RolePermissionSeeder extends Seeder
         $cashierPermissions = Permission::whereIn('code', [
             'orders.view',
             'payments.view',
+
             'payments.confirm',
+            'pos.registers.view',
+
+            'pos.sessions.open',
+            'pos.sessions.close',
+            'pos.sales.create',
         ])->pluck('id');
 
         $cashier->permissions()->sync($cashierPermissions);
@@ -119,6 +136,19 @@ class RolePermissionSeeder extends Seeder
             // Livraisons
             'deliveries.view',
             'deliveries.update',
+
+            'pos.registers.view',
+            'pos.registers.manage',
+
+            'pos.sessions.open',
+            'pos.sessions.close',
+            'pos.sales.create',
+            'pos.cash_movements.manage',
+
+            // Paramètres des factures et reçus
+            'store.document_settings.view',
+            'store.document_settings.update',
+
         ])->pluck('id');
 
         $storeManager->permissions()->sync($storeManagerPermissions);

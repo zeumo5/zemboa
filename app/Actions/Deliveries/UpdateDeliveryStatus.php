@@ -24,7 +24,7 @@ final class UpdateDeliveryStatus
             'FAILED',
         ], true)) {
             throw ValidationException::withMessages([
-                'status' => 'Statut de livraison invalide.',
+                'status' =>__('deliveries.invalid_status'),
             ]);
         }
 
@@ -38,7 +38,7 @@ final class UpdateDeliveryStatus
             ! $user->hasPermission('deliveries.update')
         ) {
             throw new AuthorizationException(
-                'Vous ne pouvez pas modifier cette livraison.'
+                __('deliveries.update_denied'),
             );
         }
 
@@ -70,7 +70,7 @@ final class UpdateDeliveryStatus
                 (int) $delivery->assigned_to !== (int) $user->id
             ) {
                 throw new AuthorizationException(
-                    'Cette livraison ne vous est pas attribuée.'
+                    __('deliveries.not_assigned_to_user'),
                 );
             }
 
@@ -79,7 +79,7 @@ final class UpdateDeliveryStatus
                 $order->fulfillment_type !== 'DELIVERY'
             ) {
                 throw ValidationException::withMessages([
-                    'order' => 'Cette commande ne peut plus être livrée.',
+                    'order' => __('deliveries.order_cannot_be_delivered'),
                 ]);
             }
 
@@ -94,7 +94,7 @@ final class UpdateDeliveryStatus
                 true
             )) {
                 throw ValidationException::withMessages([
-                    'status' => 'Transition de livraison non autorisée.',
+                    'status' => __('deliveries.invalid_status_transition')
                 ]);
             }
 
@@ -109,7 +109,7 @@ final class UpdateDeliveryStatus
                     )
                 ) {
                     throw ValidationException::withMessages([
-                        'order' => 'La réservation de stock a expiré.',
+                        'order' => __('deliveries.stock_reservation_expired'),
                     ]);
                 }
 
@@ -122,7 +122,7 @@ final class UpdateDeliveryStatus
                         ->exists()
                 ) {
                     throw ValidationException::withMessages([
-                        'order' => 'Aucune réservation de stock active.',
+                        'order' => __('deliveries.no_active_stock_reservation'),
                     ]);
                 }
 
@@ -133,7 +133,7 @@ final class UpdateDeliveryStatus
                 if ($order->payment_status !== 'PAID') {
                     throw ValidationException::withMessages([
                         'payment_status' =>
-                            'Le paiement doit être confirmé avant de terminer la livraison.',
+                            __('deliveries.payment_required_before_delivery'),
                     ]);
                 }
 
@@ -146,7 +146,7 @@ final class UpdateDeliveryStatus
                 if ($reason === '' || mb_strlen($reason) > 1000) {
                     throw ValidationException::withMessages([
                         'failure_reason' =>
-                            'Un motif de 1 à 1000 caractères est obligatoire.',
+                            __('deliveries.failure_reason_required'),
                     ]);
                 }
 

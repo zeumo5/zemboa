@@ -34,13 +34,13 @@ class CreateOrder
 
         if (! in_array($fulfillmentType, ['PICKUP', 'DELIVERY'], true)) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'fulfillment_type' => 'Le type de livraison doit être PICKUP ou DELIVERY.',
+                'fulfillment_type' => __('orders.fulfillment_invalid'),
             ]);
         }
 
         if ($fulfillmentType === 'DELIVERY' && $deliveryZoneId === null) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'delivery_zone_id' => 'Une zone de livraison est obligatoire pour une livraison.',
+                'delivery_zone_id' => __('orders.delivery_zone_required'),
             ]);
         }
 
@@ -49,13 +49,13 @@ class CreateOrder
             && ($deliveryAddress === null || trim($deliveryAddress) === '')
         ) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'delivery_address' => 'Une adresse de livraison est obligatoire.',
+                'delivery_address' => __('orders.delivery_address_required'),
             ]);
         }
 
         if (empty($items)) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'items' => 'La commande doit contenir au moins un article.',
+                'items' => __('orders.items_required'),
             ]);
         }
 
@@ -70,7 +70,7 @@ class CreateOrder
                 || (int) $variantId <= 0
             ) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'items' => 'Chaque article doit contenir une variante valide.',
+                    'items' => __('orders.variant_invalid'),
                 ]);
             }
 
@@ -79,7 +79,7 @@ class CreateOrder
                 || (int) $quantity <= 0
             ) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'quantity' => 'La quantité doit être un entier strictement positif.',
+                    'quantity' => __('orders.quantity_invalid'),
                 ]);
             }
 
@@ -120,7 +120,7 @@ class CreateOrder
                 ) {
                     throw \Illuminate\Validation\ValidationException::withMessages([
                         'fulfillment_type' =>
-                        'La livraison est désactivée pour cette boutique.',
+                        __('orders.delivery_disabled'),
                     ]);
                 }
 
@@ -130,7 +130,7 @@ class CreateOrder
                 ) {
                     throw \Illuminate\Validation\ValidationException::withMessages([
                         'fulfillment_type' =>
-                        'Le retrait en boutique est désactivé.',
+                        __('orders.pickup_disabled'),
                     ]);
                 }
             }
@@ -163,13 +163,13 @@ class CreateOrder
 
                 if ($variant->status !== 'ACTIVE') {
                     throw \Illuminate\Validation\ValidationException::withMessages([
-                        'items' => 'Cette variante de produit n’est pas disponible à la vente.',
+                        'items' => __('orders.variant_unavailable'),
                     ]);
                 }
 
                 if ($variant->product->status !== 'ACTIVE') {
                     throw \Illuminate\Validation\ValidationException::withMessages([
-                        'items' => 'Ce produit n’est pas disponible à la vente.',
+                        'items' => __('orders.product_unavailable'),
                     ]);
                 }
 
@@ -180,7 +180,7 @@ class CreateOrder
                     || (int) $quantity <= 0
                 ) {
                     throw \Illuminate\Validation\ValidationException::withMessages([
-                        'quantity' => 'La quantité doit être un entier strictement positif.',
+                        'quantity' => __('orders.quantity_invalid'),
                     ]);
                 }
 

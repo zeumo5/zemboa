@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Validation\ValidationException;
 use App\Actions\Stock\ExpireStockReservation;
 use App\Models\Role;
 use App\Models\Permission;
@@ -21,8 +22,23 @@ use Tests\TestCase;
 
 class ConfirmPaymentTest extends TestCase
 {
-    use RefreshDatabase;
+  use RefreshDatabase {
+    refreshDatabase as protected refreshIsolatedDatabase;
+}
 
+public function refreshDatabase(): void
+{
+    if (
+        config('database.default') !== 'sqlite' ||
+        config('database.connections.sqlite.database') !== ':memory:'
+    ) {
+        throw new \RuntimeException(
+            'SECURITE ZEMBOA : SQLite :memory: obligatoire.'
+        );
+    }
+
+    $this->refreshIsolatedDatabase();
+}
 
     private function authenticatePaymentCashier(User $user): void
     {
@@ -1059,6 +1075,158 @@ public function test_two_payments_cannot_exceed_order_total(): void
     );
 }
 
+private function prepareLocalizedPayment(): array
+{
+    $store = Store::create([
+        'name' => 'Boutique Paiements Traduction',
+        'slug' => 'paiements-traduction',
+        'status' => 'ACTIVE',
+    ]);
 
+    $user = User::factory()->create([
+        'store_id' => $store->id,
+    ]);
+
+    $this->authenticatePaymentCashier($user);
+
+    $category = Category::create([
+        'name' => 'Produits tests',
+        'slug' => 'produits-paiements-traduction',
+        'status' => 'ACTIVE',
+    ]);
+
+    $product = Product::create([
+        'category_id' => $category->id,
+        'name' => 'Produit Traduction',
+        'slug' => 'produit-traduction',
+        'status' => 'ACTIVE',
+    ]);
+
+    $variant = app(CreateProductVariant::class)->execute([
+        'product_id' => $product->id,
+        'sku' => 'PAY-I18N-001',
+        'price' => '5000.00',
+        'is_default' => true,
+        'status' => 'ACTIVE',
+    ]);
+
+    app(ReceiveStock::class)->execute(
+        productVariantId: $variant->id,
+        quantity: 10,
+        userId: $user->id,
+        reason: 'Stock initial test traduction'
+    );
+
+    $order = app(CreateOrder::class)->execute(
+        customerName: 'John Customer',
+        customerPhone: '690000001',
+        customerEmail: 'john@example.com',
+        fulfillmentType: 'PICKUP',
+        items: [
+            [
+                'product_variant_id' => $variant->id,
+                'quantity' => 2,
+            ],
+        ]
+    );
+
+    $payment = Payment::create([
+        'order_id' => $order->id,
+        'amount' => '4000.00',
+        'method' => 'CASH',
+        'status' => 'PENDING',
+        'cash_received' => '4000.00',
+        'change_given' => '0.00',
+    ]);
+
+    return [$user, $order, $payment, $variant];
+}
+
+public function test_already_processed_payment_error_is_in_english(): void
+{
+    [$user, $order, $payment, $variant] =
+        $this->prepareLocalizedPayment();
+
+    // Première confirmation légitime : acompte.
+    app(ConfirmPayment::class)->execute(
+        paymentId: $payment->id,
+        userId: $user->id,
+        balanceDueAt: now()->addDays(3)->format('Y-m-d H:i:s')
+    );
+
+    $this->assertSame('CONFIRMED', $payment->fresh()->status);
+
+    $previousLocale = app()->getLocale();
+    app()->setLocale('en');
+
+    try {
+        // Tenter de confirmer une deuxième fois.
+        try {
+            app(ConfirmPayment::class)->execute(
+                paymentId: $payment->id,
+                userId: $user->id
+            );
+
+            $this->fail('La double confirmation devait être refusée.');
+        } catch (ValidationException $e) {
+            $this->assertSame(
+                ['This payment has already been processed.'],
+                $e->errors()['status'] ?? []
+            );
+        }
+    } finally {
+        app()->setLocale($previousLocale);
+    }
+
+    // Un seul paiement existe.
+    $this->assertDatabaseCount('payments', 1);
+
+    // Le stock physique n'est pas décrémenté
+    // car la commande est partiellement payée.
+    $stock = $variant->stockLevel()->firstOrFail();
+
+    $this->assertSame(10, $stock->physical_quantity);
+    $this->assertSame(2, $stock->reserved_quantity);
+}
+
+public function test_cancelled_order_payment_error_is_in_english(): void
+{
+    [$user, $order, $payment, $variant] =
+        $this->prepareLocalizedPayment();
+
+    // Préparer une commande au statut annulé
+    // pour tester le refus de confirmation.
+    $order->status = 'CANCELLED';
+    $order->save();
+
+    $previousLocale = app()->getLocale();
+    app()->setLocale('en');
+
+    try {
+        try {
+            app(ConfirmPayment::class)->execute(
+                paymentId: $payment->id,
+                userId: $user->id
+            );
+
+            $this->fail('Le paiement d’une commande annulée devait être refusé.');
+        } catch (ValidationException $e) {
+            $this->assertSame(
+                ['This order can no longer receive payments.'],
+                $e->errors()['order'] ?? []
+            );
+        }
+    } finally {
+        app()->setLocale($previousLocale);
+    }
+
+    // Le paiement reste en attente.
+    $this->assertSame('PENDING', $payment->fresh()->status);
+
+    // Aucune décrémentation du stock physique.
+    $stock = $variant->stockLevel()->firstOrFail();
+
+    $this->assertSame(10, $stock->physical_quantity);
+}
 
 }
