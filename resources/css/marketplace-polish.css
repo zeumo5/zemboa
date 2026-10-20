@@ -1,0 +1,164 @@
+/* ZEMBOA — frontend polish v1. Existing design tokens, backend and routes remain authoritative. */
+:root {
+  --zm-focus: #00896b;
+  --zm-shadow-soft: 0 9px 28px rgba(16, 48, 42, .075);
+  --zm-shadow-raised: 0 22px 56px rgba(12, 49, 43, .13);
+  --zm-motion: cubic-bezier(.2,.75,.26,1);
+}
+html { scroll-padding-top: 110px; }
+body { text-rendering: optimizeLegibility; }
+#main-content { min-width: 0; }
+.zm-skip-link {
+  position: fixed; z-index: 1000; top: 10px; left: 12px;
+  transform: translateY(-160%); background: #fff; color: #073e32;
+  padding: 12px 18px; border-radius: 10px; font-weight: 800;
+  box-shadow: var(--zm-shadow-raised);
+}
+.zm-skip-link:focus { transform: translateY(0); }
+:is(.zm-nav a, .zm-see-all, .zm-store-info a, .zm-product-info a, .zm-footer-links a) {
+  text-underline-offset: 4px;
+}
+:where(a, button, input):focus-visible {
+  outline: 3px solid var(--zm-focus);
+  outline-offset: 4px;
+}
+.zm-header { box-shadow: 0 1px 0 rgba(16, 48, 42, .025); }
+.zm-nav a { position: relative; }
+.zm-nav a::after {
+  content: ''; position: absolute; bottom: -7px; left: 0; width: 100%; height: 2px;
+  background: #009e77; transform: scaleX(0); transform-origin: left;
+  transition: transform .22s var(--zm-motion);
+}
+.zm-nav a:hover::after, .zm-nav a:focus-visible::after { transform: scaleX(1); }
+.zm-btn, .zm-nav-login, .zm-auth-submit, .zm-search button, .zm-store-visit, .zm-product-price a {
+  transition: transform .24s var(--zm-motion), box-shadow .24s var(--zm-motion),
+              background-color .24s ease, border-color .24s ease, color .24s ease;
+}
+.zm-btn:hover, .zm-auth-submit:hover, .zm-search button:hover {
+  transform: translateY(-2px); box-shadow: var(--zm-shadow-soft);
+}
+.zm-btn:active, .zm-auth-submit:active, .zm-search button:active { transform: translateY(0) scale(.985); }
+.zm-product-card, .zm-store-card, .zm-preview-product {
+  box-shadow: 0 3px 13px rgba(16,48,42,.035);
+  transition: transform .25s var(--zm-motion), box-shadow .3s var(--zm-motion), border-color .25s ease;
+}
+.zm-product-card:hover, .zm-store-card:hover {
+  transform: translateY(-5px); box-shadow: var(--zm-shadow-raised); border-color: #c5e5d5;
+}
+.zm-product-image { background: #f1f5f2; }
+.zm-product-image img { object-position: center; }
+.zm-product-info h3 a, .zm-store-info h3 a { display: inline-block; }
+.zm-product-info h3 a:hover, .zm-store-info h3 a:hover { color: #087e61; }
+.zm-search, .zm-field input { transition: border-color .2s ease, box-shadow .2s ease, background .2s ease; }
+.zm-search:focus-within { border-color: #0a9e79; box-shadow: 0 0 0 4px rgba(10,158,121,.11); background: #fff; }
+.zm-search input:focus-visible { outline: 0; }
+.zm-field input:focus-visible { border-color: #0a9e79; box-shadow: 0 0 0 4px rgba(10,158,121,.11); outline: 0; }
+.zm-search button:disabled { opacity: .7; cursor: wait; }
+.zm-search[data-zm-busy="true"] button::after {
+  content: ''; display: inline-block; width: 12px; height: 12px;
+  border-radius: 50%; border: 2px solid rgba(255,255,255,.4);
+  border-top-color: #fff; margin-left: 8px; vertical-align: -2px;
+  animation: zm-rotate .7s linear infinite;
+}
+@keyframes zm-rotate { to { transform: rotate(360deg); } }
+.zm-search-feedback {
+  display: flex; justify-content: space-between; align-items: center; gap: 18px;
+  padding: 13px 18px; margin: 16px 0 24px;
+  border: 1px solid #deebe5; border-radius: 12px;
+  background: #f5faf7; color: #244c43; font-size: 13px;
+}
+.zm-search-feedback strong { color: #102e33; overflow-wrap: anywhere; }
+.zm-search-feedback a { color: #087e61; text-decoration: underline; font-weight: 800; white-space: nowrap; }
+.zm-empty-state { border-color: #dbe9e1; }
+.zm-product-no-photo { background: linear-gradient(135deg, #f2f8f4, #eaf3ef); }
+.zm-preview-banner, .zm-hero-visual, .zm-page-hero { isolation: isolate; }
+.zm-menu-toggle { display: none; }
+.zm-menu-bars { display: flex; width: 18px; flex-direction: column; gap: 4px; }
+.zm-menu-bars span { height: 2px; width: 18px; background: currentColor; border-radius: 3px; }
+@media (max-width: 960px) {
+  html { scroll-padding-top: 80px; }
+  .zm-header { height: auto; min-height: 76px; }
+  .zm-nav-shell { position: relative; flex-wrap: wrap; padding: 14px 0; }
+  .zm-nav { width: 100%; margin-left: 0; justify-content: center; padding: 14px 0 0; gap: 24px; }
+  .zm-js .zm-menu-toggle {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 42px; padding: 8px 11px; border: 1px solid #dbe7e1;
+    background: white; color: #173b35; border-radius: 10px; font-size: 12px; font-weight: 800;
+  }
+  .zm-menu-toggle:hover { background: #f0faf5; }
+  /* Never hide navigation without JavaScript: progressive enhancement. */
+  .zm-js .zm-nav { display: none; }
+  .zm-js .zm-nav.zm-nav-open {
+    display: flex; position: absolute; z-index: 20; left: 0; right: 0;
+    max-height: calc(100dvh - 100% - 16px); overflow-y: auto;
+    top: calc(100% - 1px); flex-direction: column; align-items: stretch;
+    padding: 14px; gap: 4px; background: #fff; border: 1px solid #e1ede6;
+    border-radius: 0 0 14px 14px; box-shadow: var(--zm-shadow-raised);
+  }
+  .zm-js .zm-nav.zm-nav-open a {
+    display: block; padding: 12px 15px; border-radius: 8px; width: 100%;
+  }
+  .zm-js .zm-nav.zm-nav-open a:hover { background: #eff9f3; }
+  .zm-nav a::after { display: none; }
+  .zm-nav-right { gap: 9px; }
+  .zm-search-feedback { flex-direction: column; align-items: flex-start; }
+  .zm-product-card:hover, .zm-store-card:hover { transform: none; }
+}
+@media (max-width: 435px) {
+  .zm-menu-label { display: none; }
+  .zm-search { flex-wrap: wrap; }
+  .zm-search input { flex-basis: 100%; }
+  .zm-search button { width: 100%; justify-content: center; }
+  .zm-page-hero h1 { overflow-wrap: anywhere; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* Phase 15 — navigation persistante and active page feedback. */
+.zm-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 8px 22px rgba(10, 43, 39, .08);
+}
+.zm-nav a[aria-current="page"] {
+  color: #087e61;
+}
+.zm-nav a[aria-current="page"]::after {
+  transform: scaleX(1);
+}
+.zm-back-top {
+  color: #c4ead9;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  white-space: nowrap;
+}
+.zm-back-top:hover { color: #fff; }
+@media (max-width: 960px) {
+  .zm-header { z-index: 100; }
+  .zm-nav-shell { gap: 12px; }
+  .zm-menu-toggle { order: 2; margin-left: auto; }
+  .zm-nav-right { order: 1; margin-left: auto; }
+  .zm-nav { order: 3; }
+  .zm-nav a[aria-current="page"] {
+    box-shadow: inset 3px 0 #087e61;
+    color: #087e61;
+    background: #edf8f1;
+  }
+}
+
+/* Keep header controls usable on narrow screens and at increased text size. */
+.zm-nav a { transition: color .2s ease, background-color .2s ease; }
+.zm-menu-toggle { transition: background-color .2s ease, border-color .2s ease; }
+.zm-menu-toggle[aria-expanded="true"] { background: #edf8f1; border-color: #087e61; }
+.zm-footer-bottom { flex-wrap: wrap; }
+@media (max-width: 435px) {
+  .zm-nav-shell { column-gap: 8px; }
+  .zm-brand { gap: 7px; }
+  .zm-nav-right { gap: 8px; }
+  .zm-menu-toggle { padding: 8px; min-width: 42px; }
+  .zm-nav-login { gap: 0; }
+}

@@ -1,0 +1,100 @@
+/* ZEMBOA brand palette: shared by Blade components and Tailwind v4 utilities. */
+:root {
+  --ink: var(--color-zm-charcoal);
+  --ink2: var(--color-zm-slate);
+  --forest: var(--color-zm-green);
+  --deep: var(--color-zm-charcoal);
+  --green: var(--color-zm-green);
+  --bright: var(--color-zm-emerald);
+  --pale: var(--color-zm-ivory);
+  --lime: var(--color-zm-gold);
+  --muted: var(--color-zm-slate);
+  --line: color-mix(in srgb, var(--color-zm-green) 14%, white);
+  --zm-tint: color-mix(in srgb, var(--color-zm-emerald) 7%, white);
+  --zm-focus: var(--color-zm-green);
+}
+body { background: var(--pale); color: var(--ink); }
+.zm-announcement, .zm-footer { background: var(--deep); color: var(--pale); }
+.zm-header { background: white; border-bottom-color: var(--line); }
+.zm-brand-symbol { padding: 0; background: transparent; border-radius: 0; }
+.zm-brand-symbol img { width: 100%; height: 100%; }
+.zm-brand-text { color: var(--ink); }
+.zm-brand-text span { color: var(--color-zm-gold); }
+.zm-dot { background: var(--color-zm-gold); box-shadow: 0 0 0 3px rgb(242 217 92 / 14%); }
+.zm-nav a:hover, .zm-nav a[aria-current="page"], .zm-language button.active,
+.zm-nav-login span, .zm-product-info h3 a:hover, .zm-store-info h3 a:hover {
+  color: var(--green);
+}
+.zm-nav a::after { background: var(--color-zm-gold); }
+.zm-language button { color: var(--ink2); }
+.zm-language button.active { text-decoration: underline; text-underline-offset: 4px; }
+.zm-nav-login, .zm-field input { border-color: var(--line); }
+.zm-nav-login:hover, .zm-menu-toggle:hover, .zm-menu-toggle[aria-expanded="true"] {
+  background: var(--zm-tint); border-color: var(--green); color: var(--green);
+}
+.zm-hero, .zm-page-hero, .zm-login-story {
+  background: linear-gradient(125deg, var(--deep), var(--forest)); color: var(--pale);
+}
+.zm-hero-visual { background: linear-gradient(145deg, var(--forest), var(--deep)); border-color: rgb(242 217 92 / 35%); }
+.zm-hero h1 span, .zm-story-stamp { color: var(--pale); }
+.zm-title-dot, .zm-story-stamp span { color: var(--color-zm-gold); }
+.zm-visual-spotlight { background: linear-gradient(135deg, var(--pale), var(--color-zm-gold-tint)); }
+.zm-visual-monogram { color: var(--green); text-shadow: none; }
+.zm-visual-monogram span { color: var(--green); }
+.zm-visual-glow:before { background: radial-gradient(circle, rgb(20 184 132 / 20%), transparent 65%); }
+
+.zm-hero-eyebrow-mark { background: var(--color-zm-gold); box-shadow: 0 0 0 5px rgb(242 217 92 / 12%); }
+.zm-hero-eyebrow, .zm-page-eyebrow, .zm-story-kicker, .zm-bottom-cta-inner>div>span { color: var(--pale); }
+.zm-fact-icon { color: var(--color-zm-gold); }
+.zm-floating-tag { background: var(--pale); color: var(--ink); border: 1px solid var(--line); }
+.zm-floating-tag span { color: var(--green); }
+.zm-btn-lime, .zm-btn-light { background: var(--color-zm-gold); color: var(--ink); }
+.zm-btn-lime:hover, .zm-btn-light:hover { background: var(--color-zm-gold-hover); color: var(--ink); }
+.zm-btn-dark, .zm-auth-submit, .zm-search button { background: var(--green); color: var(--pale); }
+.zm-btn-dark:hover, .zm-auth-submit:hover, .zm-search button:hover { background: var(--deep); }
+.zm-search-strip, .zm-store-section { background: white; }
+.zm-product-section, .zm-directory-section, .zm-detail-section, .zm-login-section { background: var(--pale); }
+.zm-section-kicker, .zm-store-label, .zm-product-store, .zm-detail-eyebrow,
+.zm-empty-eyebrow, .zm-form-kicker, .zm-search-feedback a, .zm-see-all,
+.zm-empty-link, .zm-inline-clear, .zm-login-back, .zm-detail-store-link strong {
+  color: var(--green);
+}
+.zm-kicker-line { border-color: var(--color-zm-gold); }
+.zm-see-all { border-bottom-color: var(--color-zm-gold); }
+.zm-section-heading p, .zm-store-info p, .zm-empty-state p, .zm-detail-description,
+.zm-detail-store-link, .zm-login-intro, .zm-login-small-note, .zm-detail-price-label,
+.zm-crumb, .zm-product-no-photo { color: var(--ink2); }
+.zm-store-card, .zm-product-card, .zm-preview-product, .zm-detail-grid { border-color: var(--line); }
+.zm-store-card:hover, .zm-product-card:hover { border-color: var(--color-zm-gold); }
+.zm-store-cover { background: linear-gradient(125deg, var(--forest), var(--deep)); color: var(--pale); border-bottom: 2px solid var(--color-zm-gold); }
+.zm-store-cover strong { color: var(--pale); }
+.zm-store-visit, .zm-product-price a, .zm-search-label-icon { background: var(--zm-tint); color: var(--green); }
+.zm-store-visit:hover, .zm-product-price a:hover { background: var(--green); color: var(--pale); }
+.zm-featured { color: var(--green); background: var(--color-zm-gold-tint); }
+.zm-product-price strong, .zm-detail-price { color: var(--green); }
+.zm-search, .zm-field input { background: var(--pale); color: var(--ink); }
+.zm-search input { color: var(--ink); }
+.zm-search input::placeholder { color: var(--ink2); opacity: 1; }
+.zm-search:focus-within, .zm-field input:focus-visible { border-color: var(--green); box-shadow: 0 0 0 4px rgb(15 107 87 / 12%); }
+.zm-search-feedback, .zm-empty-state, .zm-product-no-photo { background: var(--zm-tint); border-color: var(--line); }
+.zm-search-feedback, .zm-search-feedback strong { color: var(--ink); }
+.zm-empty-icon { background: var(--green); color: var(--color-zm-gold); }
+.zm-preview-banner, .zm-bottom-cta { background: var(--forest); color: var(--pale); }
+.zm-preview-badge { color: var(--pale); }
+.zm-footer { border-top: 2px solid var(--color-zm-gold); }
+.zm-brand-footer .zm-brand-text { color: var(--pale); }
+.zm-footer-links strong { color: var(--color-zm-gold); }
+.zm-footer-top>div:first-child p, .zm-footer-links a, .zm-footer-links span,
+.zm-footer-bottom, .zm-back-top { color: #CBD5E1; }
+.zm-footer a:hover { color: var(--color-zm-gold); }
+.zm-alert { color: var(--ink); border-color: var(--color-zm-red); background: color-mix(in srgb, var(--color-zm-red) 7%, white); }
+.zm-alert strong { color: #9A3535; }
+:is(a, button, input):focus-visible { outline-color: var(--zm-focus); }
+.zm-hero :focus-visible, .zm-page-hero :focus-visible, .zm-bottom-cta :focus-visible,
+.zm-footer :focus-visible, .zm-login-story :focus-visible { outline-color: var(--color-zm-gold); }
+@media (max-width: 960px) {
+  .zm-js .zm-menu-toggle { color: var(--green); border-color: var(--line); }
+  .zm-js .zm-nav.zm-nav-open { border-color: var(--line); }
+  .zm-js .zm-nav.zm-nav-open a:hover, .zm-nav a[aria-current="page"] { background: var(--zm-tint); }
+  .zm-nav a[aria-current="page"] { color: var(--green); box-shadow: inset 3px 0 var(--color-zm-gold); }
+}

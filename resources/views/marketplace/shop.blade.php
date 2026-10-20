@@ -1,0 +1,11 @@
+@extends('marketplace.layout')
+@section('title', $store->name)
+@section('content')
+<section class="zm-page-hero zm-shop-page-hero"><div class="zm-container"><a class="zm-back" href="{{ route('marketplace.stores') }}">← {{ __('marketplace.navigation_stores') }}</a><div class="zm-shop-head"><div class="zm-shop-avatar" aria-hidden="true">{{ mb_strtoupper(mb_substr($store->name, 0, 1)) }}</div><div><span class="zm-page-eyebrow">{{ __('marketplace.shop_label') }} / ZEMBOA</span><h1>{{ $store->name }}<span class="zm-title-dot">.</span></h1><p>{{ $store->slogan ?: ($store->description ?: __('marketplace.store_description_default')) }}</p></div></div><span class="zm-page-hero-watermark" aria-hidden="true">Z</span></div></section>
+<section class="zm-section zm-directory-section"><div class="zm-container"><div class="zm-section-heading"><div><div class="zm-section-kicker"><span class="zm-kicker-line"></span>{{ __('marketplace.navigation_products') }}</div><h2>{{ __('marketplace.store_catalog') }}</h2></div></div><form class="zm-search zm-search-page" data-zm-search method="get" action="{{ route('marketplace.shops.show', ['shopSlug' => $store->slug]) }}"><label class="zm-sr-only" for="shop-q">{{ __('marketplace.search') }}</label><input id="shop-q" name="q" maxlength="80" value="{{ $search }}" placeholder="{{ __('marketplace.search') }}"><button type="submit">{{ __('marketplace.search_button') }} →</button></form>
+@if($search !== '')
+<div class="zm-search-feedback" role="status" aria-live="polite"><span>{{ __('marketplace.search_results_for') }} <strong>« {{ $search }} »</strong> · {{ $products->total() }} {{ __('marketplace.results') }}</span><a href="{{ route('marketplace.shops.show', ['shopSlug' => $store->slug]) }}">{{ __('marketplace.clear_search') }} <span aria-hidden="true">×</span></a></div>
+@endif
+@if($products->count() === 0)<div class="zm-empty-state"><div class="zm-empty-icon">◈</div><div><span class="zm-empty-eyebrow">ZEMBOA MARKETPLACE</span><h3>{{ __('marketplace.empty_products_title') }}</h3><p>{{ __('marketplace.no_products') }}</p></div></div>
+@else<div class="zm-products-grid">@foreach($products as $product) @include('marketplace.components.product-card') @endforeach</div><div class="zm-pagination">{{ $products->links() }}</div>@endif</div></section>
+@endsection

@@ -1,6 +1,6 @@
 <?php
 
-
+use App\Http\Controllers\MarketplaceController;
 use App\Http\Controllers\GuestLocaleController;
 use App\Http\Controllers\UserLocaleController;
 use App\Http\Controllers\StoreDocumentSettingController;
@@ -44,9 +44,9 @@ Route::middleware('auth')->patch(
     [UserLocaleController::class, 'update']
 )->name('account.locale.update');
 
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::get('/', [MarketplaceController::class, 'index'])->name('marketplace.home');
+Route::get('/produits', [MarketplaceController::class, 'products'])->name('marketplace.products');
+Route::get('/boutiques', [MarketplaceController::class, 'stores'])->name('marketplace.stores');
 
 // Authentification des utilisateurs des boutiques.
 
@@ -651,4 +651,23 @@ Route::prefix('shops/{shopSlug}')
         )
             ->block(30, 10)
             ->name('checkout.store');
+    });
+
+
+/*
+|--------------------------------------------------------------------------
+| Pages publiques HTML de la marketplace (API JSON /shops/ conservees)
+|--------------------------------------------------------------------------
+*/
+Route::prefix('boutiques/{shopSlug}')
+    ->middleware([
+        'public.tenant',
+        \App\Http\Middleware\ApplyStoreLocale::class,
+    ])
+    ->name('marketplace.')
+    ->group(function () {
+        Route::get('/', [MarketplaceController::class, 'shop'])->name('shops.show');
+        Route::get('/produits/{product}', [MarketplaceController::class, 'product'])
+            ->whereNumber('product')
+            ->name('products.show');
     });

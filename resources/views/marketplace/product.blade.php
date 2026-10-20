@@ -1,0 +1,8 @@
+@extends('marketplace.layout')
+@section('title', $item->name)
+@section('content')
+<section class="zm-section zm-detail-section"><div class="zm-container"><div class="zm-crumb"><a href="{{ route('marketplace.home') }}">ZEMBOA</a><span>/</span><a href="{{ route('marketplace.shops.show', ['shopSlug' => $store->slug]) }}">{{ $store->name }}</a><span>/</span><span>{{ $item->name }}</span></div><div class="zm-detail-grid">
+<div class="zm-detail-visual">@if($item->image_path)<img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($item->image_path) }}" alt="{{ $item->name }}" decoding="async">@else<div class="zm-product-no-photo"><span aria-hidden="true">◈</span><span>{{ __('marketplace.no_photo') }}</span></div>@endif</div>
+<div class="zm-detail-info"><span class="zm-detail-eyebrow">{{ $item->category_name }}</span><h1>{{ $item->name }}</h1><a class="zm-detail-store-link" href="{{ route('marketplace.shops.show', ['shopSlug' => $store->slug]) }}">{{ __('marketplace.shop_label') }} : <strong>{{ $store->name }}</strong> ↗</a><div class="zm-detail-divider"></div><span class="zm-detail-price-label">{{ __('marketplace.price') }}</span><div class="zm-detail-price">{{ $item->display_price === null ? __('marketplace.price_unavailable') : number_format((float) $item->display_price, 0, ',', ' ') . ' FCFA' }}</div><div class="zm-detail-divider"></div><h2>{{ __('marketplace.product_information') }}</h2><p class="zm-detail-description">{{ $item->description ?: __('marketplace.product_description_default') }}</p><a class="zm-btn zm-btn-dark" href="{{ route('marketplace.shops.show', ['shopSlug' => $store->slug]) }}">{{ __('marketplace.browse_store') }} ↗</a></div>
+</div></div></section>
+@endsection

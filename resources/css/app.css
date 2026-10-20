@@ -1,9 +1,23 @@
 @import 'tailwindcss';
 
+@import './marketplace.css';
+@import './marketplace-polish.css';
+@import './marketplace-brand.css';
+
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
 @theme {
+    --color-zm-green: #0F6B57;
+    --color-zm-emerald: #14B884;
+    --color-zm-gold: #F2D95C;
+    --color-zm-gold-hover: #E7C94A;
+    --color-zm-gold-tint: #FFF7D1;
+    --color-zm-yellow: var(--color-zm-gold);
+    --color-zm-red: #C94B4B;
+    --color-zm-charcoal: #15202B;
+    --color-zm-slate: #334155;
+    --color-zm-ivory: #F8FAFC;
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
