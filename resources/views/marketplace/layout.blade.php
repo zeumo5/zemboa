@@ -9,9 +9,6 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'ZEMBOA') — ZEMBOA</title>
     <meta name="description" content="{{ __('marketplace.tagline') }}">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
    @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body id="top" tabindex="-1">
@@ -32,6 +29,12 @@
         <a href="{{ route('marketplace.stores') }}" @if(request()->routeIs('marketplace.stores', 'marketplace.shops.*')) aria-current="page" @endif>{{ __('marketplace.navigation_stores') }}</a>
       </nav>
       <div class="zm-nav-right">
+        <details class="zm-header-search">
+          <summary aria-label="{{ __('marketplace.global_search') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg></summary>
+          <form class="zm-search zm-header-search-form" method="get" action="{{ route('marketplace.products') }}">
+            <label class="zm-sr-only" for="header-search-q">{{ __('marketplace.global_search') }}</label><input id="header-search-q" type="search" name="q" maxlength="80" placeholder="{{ __('marketplace.global_search') }}"><button type="submit">{{ __('marketplace.search_button') }}</button>
+          </form>
+        </details>
         <div class="zm-language" aria-label="{{ __('marketplace.language_label') }}">
           <button type="button" data-locale="fr" class="{{ app()->getLocale() === 'fr' ? 'active' : '' }}" aria-pressed="{{ app()->getLocale() === 'fr' ? 'true' : 'false' }}">FR</button>
           <span>/</span>

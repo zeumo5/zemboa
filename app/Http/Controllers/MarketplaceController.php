@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\Store;
+use App\Models\Category;
+use App\Models\ProductVariant;
+use App\Models\ProductImage;
 use App\Support\TenantContext;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Query\Builder;
@@ -17,15 +20,27 @@ use Illuminate\Support\Facades\DB;
  */
 final class MarketplaceController extends Controller
 {
+    /** Public identity only; each setting is joined to its own active store. */
+    private function publicStores(): \Illuminate\Database\Eloquent\Builder
+    {
+        return Store::query()
+            ->leftJoin('store_settings as identity', 'identity.store_id', '=', 'stores.id')
+            ->where('stores.status', 'ACTIVE')
+            ->orderBy('stores.name')
+            ->select([
+                'stores.id', 'stores.name', 'stores.slug', 'stores.description',
+                'stores.slogan', 'stores.address',
+                'identity.logo_path as public_logo_path',
+                'identity.banner_path as public_banner_path',
+                'identity.primary_color as public_primary_color',
+            ]);
+    }
+
     public function index(Request $request): View
     {
         $search = $this->search($request);
 
-        $stores = Store::query()
-            ->where('status', 'ACTIVE')
-            ->orderBy('name')
-            ->limit(8)
-            ->get(['id', 'name', 'slug', 'description', 'slogan']);
+        $stores = $this->publicStores()->limit(8)->get();
 
         $products = $this->publicProducts()
             ->when($search !== '', function (Builder $query) use ($search): void {
@@ -66,12 +81,10 @@ final class MarketplaceController extends Controller
     {
         $search = $this->search($request);
 
-        $stores = Store::query()
-            ->where('status', 'ACTIVE')
+        $stores = $this->publicStores()
             ->when($search !== '', function ($query) use ($search): void {
-                $query->where('name', 'like', '%' . $search . '%');
+                $query->where('stores.name', 'like', '%' . $search . '%');
             })
-            ->orderBy('name')
             ->paginate(24)
             ->withQueryString();
 
@@ -80,35 +93,54 @@ final class MarketplaceController extends Controller
 
     public function shop(Request $request, string $shopSlug): View
     {
-        // Le middleware public.tenant a déjà validé le statut ACTIVE.
         $store = app(TenantContext::class)->store();
-        abort_unless($store->slug === $shopSlug, 404);
-
+        abort_unless($store->slug === $shopSlug && $store->status === 'ACTIVE', 404);
+        $settings = $store->settings()->where('store_id', $store->id)->first();
+        $page = match ($request->route()->getName()) {
+            'marketplace.shops.products' => 'catalog',
+            'marketplace.shops.categories' => 'categories',
+            'marketplace.shops.about' => 'about',
+            'marketplace.shops.services' => 'services',
+            default => 'home',
+        };
+        if (in_array($page, ['about', 'services'], true)) {
+            return view('marketplace.merchant.'.$page, compact('store', 'settings'));
+        }
         $search = $this->search($request);
+        $data = $request->validate(['category' => ['nullable', 'string', 'max:180']]);
+        $selectedCategory = $data['category'] ?? '';
+        $categories = Category::query()->where('store_id', $store->id)
+            ->where('status', 'ACTIVE')->orderBy('name')->get();
+        if ($selectedCategory !== '') {
+            abort_unless($categories->contains('slug', $selectedCategory), 404);
+        }
         $products = $this->publicProducts($store->id)
-            ->when($search !== '', function (Builder $query) use ($search): void {
-                $query->where('p.name', 'like', '%' . $search . '%');
-            })
-            ->orderByDesc('p.is_featured')
-            ->orderByDesc('p.id')
-            ->paginate(12)
-            ->withQueryString();
+            ->when($search !== '', fn (Builder $query) => $query->where('p.name', 'like', '%'.$search.'%'))
+            ->when($selectedCategory !== '', fn (Builder $query) => $query->where('c.slug', $selectedCategory))
+            ->orderByDesc('p.is_featured')->orderByDesc('p.id')
+            ->paginate(12)->withQueryString();
+        $variantGroups = ProductVariant::query()->where('store_id', $store->id)
+            ->where('status', 'ACTIVE')->whereIn('product_id', $products->pluck('id'))
+            ->with('stockLevel')->orderByDesc('is_default')->orderBy('id')->get()->groupBy('product_id');
+        $view = $page === 'home' ? 'marketplace.shop' : 'marketplace.merchant.'.$page;
 
-        return view('marketplace.shop', compact('store', 'products', 'search'));
+        return view($view, compact('store', 'settings', 'search', 'categories', 'selectedCategory', 'products', 'variantGroups'));
     }
 
     public function product(string $shopSlug, int $product): View
     {
         $store = app(TenantContext::class)->store();
-        abort_unless($store->slug === $shopSlug, 404);
-
-        $item = $this->publicProducts($store->id)
-            ->where('p.id', $product)
-            ->first();
-
+        abort_unless($store->slug === $shopSlug && $store->status === 'ACTIVE', 404);
+        $item = $this->publicProducts($store->id)->where('p.id', $product)->first();
         abort_if($item === null, 404);
+        $settings = $store->settings()->where('store_id', $store->id)->first();
+        $variants = ProductVariant::query()->where('store_id', $store->id)
+            ->where('product_id', $item->id)->where('status', 'ACTIVE')
+            ->with(['stockLevel', 'attributeValues'])->orderByDesc('is_default')->orderBy('id')->get();
+        $images = ProductImage::query()->where('store_id', $store->id)->where('product_id', $item->id)
+            ->orderByDesc('is_primary')->orderBy('position')->orderBy('id')->get();
 
-        return view('marketplace.product', compact('store', 'item'));
+        return view('marketplace.product', compact('store', 'item', 'settings', 'variants', 'images'));
     }
 
     private function search(Request $request): string

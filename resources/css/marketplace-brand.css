@@ -98,3 +98,26 @@ body { background: var(--pale); color: var(--ink); }
   .zm-js .zm-nav.zm-nav-open a:hover, .zm-nav a[aria-current="page"] { background: var(--zm-tint); }
   .zm-nav a[aria-current="page"] { color: var(--green); box-shadow: inset 3px 0 var(--color-zm-gold); }
 }
+
+/* Merchant-owned directory identities; no platform watermark on store covers. */
+:root { --font: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif; --display: var(--font); }
+.zm-merchant-card { display: flex; flex-direction: column; }
+.zm-merchant-card .zm-store-cover { display: block; height: 150px; padding: 0; position: relative; background: color-mix(in srgb, var(--store-accent) 9%, #f8fafc); border-bottom: 1px solid var(--line); overflow: hidden; }
+.zm-merchant-card .zm-store-cover img { width: 100%; height: 100%; object-fit: cover; }
+.zm-merchant-card .zm-store-cover-pattern { position: absolute; inset: 0; background: radial-gradient(ellipse at 85% 20%, color-mix(in srgb, var(--store-accent) 18%, transparent), transparent 60%), repeating-linear-gradient(135deg, transparent 0 25px, #ffffff80 26px 27px); }
+.zm-merchant-card .zm-store-info { display: flex; flex-direction: column; align-items: stretch; gap: 18px; padding: 0 22px 22px; flex: 1; }
+.zm-store-identity { flex: 1; min-width: 0; }
+.zm-store-avatar { display: grid; place-items: center; position: relative; margin: -28px 0 14px; width: 64px; height: 64px; border: 4px solid white; border-radius: 16px; background: white; color: #334155; box-shadow: 0 3px 12px #15202b14; font: 800 22px var(--display); overflow: hidden; }
+.zm-store-avatar img { width: 100%; height: 100%; object-fit: contain; }
+.zm-merchant-card .zm-store-label { color: #475569; font-size: 10px; letter-spacing: .06em; }
+.zm-merchant-card h3 { margin-block: 8px; overflow-wrap: anywhere; }
+.zm-merchant-card .zm-store-location { display: flex; align-items: flex-start; gap: 7px; margin-block: 12px 0; font-size: 12px; }
+.zm-store-location svg { width: 16px; height: 18px; flex: none; }
+.zm-merchant-card .zm-store-visit { display: flex; justify-content: space-between; gap: 12px; width: auto; height: auto; padding: 12px 14px; border-radius: 9px; font-size: 12px; font-weight: 800; }
+.zm-header-search > summary { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 9px; cursor: pointer; list-style: none; }
+.zm-header-search > summary::-webkit-details-marker { display: none; }
+.zm-header-search > summary svg { width: 19px; height: 19px; }
+.zm-header-search[open] > summary, .zm-header-search > summary:hover { background: var(--zm-tint); }
+.zm-header-search > summary:focus-visible { outline: 3px solid var(--zm-focus); outline-offset: 3px; }
+.zm-nav-shell { position: relative; }
+.zm-header-search-form { position: absolute; top: calc(100% + 8px); right: 0; width: min(560px, calc(100vw - 36px), 100%); box-shadow: var(--zm-shadow-raised); background: white; }

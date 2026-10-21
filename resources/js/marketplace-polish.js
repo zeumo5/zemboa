@@ -50,3 +50,13 @@ window.addEventListener('pageshow', () => {
     if (button) { button.disabled = false; button.removeAttribute('aria-busy'); }
   });
 });
+
+// The global catalogue search remains reachable from the sticky platform header.
+const headerSearch = document.querySelector('.zm-header-search');
+if (headerSearch) {
+  headerSearch.addEventListener('toggle', () => { if (headerSearch.open) headerSearch.querySelector('input').focus(); });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && headerSearch.open) { headerSearch.open = false; headerSearch.querySelector('summary').focus(); }
+  });
+  document.addEventListener('click', event => { if (!headerSearch.contains(event.target)) headerSearch.open = false; });
+}

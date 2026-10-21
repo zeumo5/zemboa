@@ -26,3 +26,25 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 .env.testing
+# Local demonstration environment, SQLite sidecars and generated media.
+.env.demo
+.env.*
+!.env.example
+!.env.demo.example
+/database/zemboa_demo.sqlite*
+/storage/demo/
+/public/marketplace/demo/
+/bootstrap/cache/demo-*.php
+
+# Local archives, patches and backup copies are not release sources.
+*.zip
+*.bak
+/*.patch
+/$content)
+/$locales)
+
+# Historical one-off import/repair scripts and their local instructions.
+/install_marketplace.php
+/zemboa_i18n_returns_corrige.php
+/README_INSTALLATION.txt
+/database/*.sqlite*

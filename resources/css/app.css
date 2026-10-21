@@ -3,6 +3,7 @@
 @import './marketplace.css';
 @import './marketplace-polish.css';
 @import './marketplace-brand.css';
+@import './storefront.css';
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';

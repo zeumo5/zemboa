@@ -1,0 +1,66 @@
+[
+  {
+    "source": "public/marketplace/demo-photos-v1/mug.jpg",
+    "target": "public/marketplace/demo/demo-yaounde-maison/demo-mug-ceramique.svg"
+  },
+  {
+    "source": "public/marketplace/demo-photos-v1/coussin.jpg",
+    "target": "public/marketplace/demo/demo-yaounde-maison/demo-coussin-decoratif.svg"
+  },
+  {
+    "source": "public/marketplace/demo-photos-v1/panier.jpg",
+    "target": "public/marketplace/demo/demo-yaounde-maison/demo-panier-de-rangement.svg"
+  },
+  {
+    "source": "public/marketplace/demo-photos-v1/plateau.jpg",
+    "target": "public/marketplace/demo/demo-yaounde-maison/demo-plateau-en-bois.svg"
+  },
+  {
+    "source": "public/marketplace/demo-photos-v1/chemise.jpg",
+    "target": "public/marketplace/demo/demo-douala-atelier/demo-chemise-coton.svg"
+  },
+  {
+    "source": "public/marketplace/demo-photos-v1/sac.jpg",
+    "target": "public/marketplace/demo/demo-douala-atelier/demo-sac-en-tissu.svg"
+  },
+  {
+    "source": "public/marketplace/demo-photos-v1/pochette.jpg",
+    "target": "public/marketplace/demo/demo-douala-atelier/demo-pochette-artisanale.svg"
+  },
+  {
+    "source": "public/marketplace/demo-photos-v1/foulard.jpg",
+    "target": "public/marketplace/demo/demo-douala-atelier/demo-foulard-tisse.svg"
+  },
+  {
+    "source": "public/marketplace/demo-photos-v1/cafe.jpg",
+    "target": "public/marketplace/demo/demo-bafoussam-terroir/demo-cafe-moulu.svg"
+  },
+  {
+    "source": "public/marketplace/demo-photos-v1/the.jpg",
+    "target": "public/marketplace/demo/demo-bafoussam-terroir/demo-the-de-montagne.svg"
+  },
+  {
+    "source": "public/marketplace/demo-photos-v1/corbeille.jpg",
+    "target": "public/marketplace/demo/demo-bafoussam-terroir/demo-corbeille-tissee.svg"
+  },
+  {
+    "source": "public/marketplace/demo-photos-v1/set.jpg",
+    "target": "public/marketplace/demo/demo-bafoussam-terroir/demo-set-de-table.svg"
+  },
+  {
+    "source": "public/marketplace/demo-photos-v1/stand.jpg",
+    "target": "public/marketplace/demo/demo-buea-digital/demo-phone-stand.svg"
+  },
+  {
+    "source": "public/marketplace/demo-photos-v1/sleeve.jpg",
+    "target": "public/marketplace/demo/demo-buea-digital/demo-laptop-sleeve.svg"
+  },
+  {
+    "source": "public/marketplace/demo-photos-v1/mat.jpg",
+    "target": "public/marketplace/demo/demo-buea-digital/demo-desk-mat.svg"
+  },
+  {
+    "source": "public/marketplace/demo-photos-v1/cable.jpg",
+    "target": "public/marketplace/demo/demo-buea-digital/demo-cable-organiser.svg"
+  }
+]

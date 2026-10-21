@@ -667,6 +667,10 @@ Route::prefix('boutiques/{shopSlug}')
     ->name('marketplace.')
     ->group(function () {
         Route::get('/', [MarketplaceController::class, 'shop'])->name('shops.show');
+        Route::get('/produits', [MarketplaceController::class, 'shop'])->name('shops.products');
+        Route::get('/categories', [MarketplaceController::class, 'shop'])->name('shops.categories');
+        Route::get('/a-propos', [MarketplaceController::class, 'shop'])->name('shops.about');
+        Route::get('/livraison-retrait', [MarketplaceController::class, 'shop'])->name('shops.services');
         Route::get('/produits/{product}', [MarketplaceController::class, 'product'])
             ->whereNumber('product')
             ->name('products.show');

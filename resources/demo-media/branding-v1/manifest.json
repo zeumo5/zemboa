@@ -1,0 +1,30 @@
+[
+  {
+    "slug": "demo-yaounde-maison",
+    "demoOnly": true,
+    "primary_color": "#34635C",
+    "logo_path": "branding-v1/demo-yaounde-maison/logo.svg",
+    "banner_path": "branding-v1/demo-yaounde-maison/banner.svg"
+  },
+  {
+    "slug": "demo-douala-atelier",
+    "demoOnly": true,
+    "primary_color": "#835447",
+    "logo_path": "branding-v1/demo-douala-atelier/logo.svg",
+    "banner_path": "branding-v1/demo-douala-atelier/banner.svg"
+  },
+  {
+    "slug": "demo-buea-digital",
+    "demoOnly": true,
+    "primary_color": "#263D62",
+    "logo_path": "branding-v1/demo-buea-digital/logo.svg",
+    "banner_path": "branding-v1/demo-buea-digital/banner.svg"
+  },
+  {
+    "slug": "demo-bafoussam-terroir",
+    "demoOnly": true,
+    "primary_color": "#64733F",
+    "logo_path": "branding-v1/demo-bafoussam-terroir/logo.svg",
+    "banner_path": "branding-v1/demo-bafoussam-terroir/banner.svg"
+  }
+]

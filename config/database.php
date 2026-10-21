@@ -32,6 +32,19 @@ return [
 
     'connections' => [
 
+        // Explicit opt-in only; never changes the normal or PHPUnit connection.
+        'sqlite_demo' => [
+            'driver' => 'sqlite',
+            'url' => null,
+            'database' => database_path('zemboa_demo.sqlite'),
+            'prefix' => '',
+            'foreign_key_constraints' => true,
+            'busy_timeout' => 5000,
+            'journal_mode' => 'WAL',
+            'synchronous' => 'NORMAL',
+            'transaction_mode' => 'IMMEDIATE',
+        ],
+
         'sqlite' => [
             'driver' => 'sqlite',
             'url' => env('DB_URL'),
