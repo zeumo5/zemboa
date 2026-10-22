@@ -48,6 +48,19 @@ Route::get('/', [MarketplaceController::class, 'index'])->name('marketplace.home
 Route::get('/produits', [MarketplaceController::class, 'products'])->name('marketplace.products');
 Route::get('/boutiques', [MarketplaceController::class, 'stores'])->name('marketplace.stores');
 
+// Global buyer identity: same users provider, independent session guard, no tenant middleware.
+Route::prefix('client')->name('buyer.')->group(function () {
+    $controller = \App\Http\Controllers\Buyer\SessionController::class;
+    Route::get('/inscription', [$controller, 'registerForm'])->name('register');
+    Route::post('/inscription', [$controller, 'register'])->middleware('throttle:buyer.register')->name('register.store');
+    Route::get('/connexion', [$controller, 'loginForm'])->name('login');
+    Route::post('/connexion', [$controller, 'login'])->middleware('throttle:buyer.login')->name('login.store');
+    Route::middleware('buyer')->group(function () use ($controller) {
+        Route::get('/compte', [$controller, 'account'])->name('account');
+        Route::post('/deconnexion', [$controller, 'logout'])->name('logout');
+    });
+});
+
 // Authentification des utilisateurs des boutiques.
 
 Route::get(

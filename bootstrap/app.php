@@ -25,6 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->alias([
+            'buyer' => \App\Http\Middleware\EnsureBuyerAuthenticated::class,
             'tenant' => SetTenantContext::class,
             'public.tenant' => SetPublicTenantContext::class,
             'admin' => EnsureSuperAdmin::class,

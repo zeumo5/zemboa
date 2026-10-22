@@ -35,6 +35,13 @@ class User extends Authenticatable
             ->exists();
     }
 
+    public function canUseBuyerAccount(): bool
+    {
+        return $this->status === 'ACTIVE'
+            && $this->is_buyer === true
+            && ! $this->hasRole('SUPER_ADMIN');
+    }
+
     public function hasPermission(string $permissionCode): bool
     {
         return $this->roles()
@@ -52,6 +59,7 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
+            'is_buyer' => 'boolean',
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];

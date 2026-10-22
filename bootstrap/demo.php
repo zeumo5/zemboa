@@ -83,8 +83,7 @@ $app->afterBootstrapping(LoadConfiguration::class, function ($app) use ($local):
     $config->set('app.locale', 'fr');
     $config->set('app.key', $local['APP_KEY'] ?? '');
     $config->set('demo.owner_password', $local['DEMO_OWNER_PASSWORD'] ?? '');
-    $config->set('cache.default', 'array');
-    $config->set('cache.stores', ['array' => ['driver' => 'array', 'serialize' => false]]);
+    $config->set('cache', require __DIR__.'/demo-cache.php');
     $config->set('queue.default', 'null');
     $config->set('queue.connections', ['null' => ['driver' => 'null']]);
     $config->set('queue.failed.driver', 'null');
@@ -114,7 +113,7 @@ $app->afterBootstrapping(LoadConfiguration::class, function ($app) use ($local):
     ]);
     $config->set('filesystems.links', []);
     DemoDatabase::assertConfiguration();
-    foreach (['demo', 'demo/sessions', 'demo/views', 'demo/private', 'demo/laravel.log'] as $path) {
+    foreach (['demo', 'demo/sessions', 'demo/views', 'demo/private', 'demo/limiter', 'demo/laravel.log'] as $path) {
         DemoDatabase::assertLocalPath(storage_path($path), 'storage/'.$path);
     }
     DemoDatabase::assertLocalPath(public_path('marketplace/demo'), 'public/marketplace/demo');

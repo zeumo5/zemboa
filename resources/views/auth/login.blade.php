@@ -9,6 +9,6 @@
     <div class="zm-field"><label for="email">{{ __('marketplace.email') }}</label><input id="email" type="email" name="email" autocomplete="username" inputmode="email" value="{{ old('email') }}" placeholder="nom@exemple.com" required autofocus></div>
     <div class="zm-field"><label for="password">{{ __('marketplace.password') }}</label><input id="password" type="password" name="password" autocomplete="current-password" placeholder="••••••••••" required></div>
     <button class="zm-auth-submit" type="submit">{{ __('marketplace.login_submit') }} <span aria-hidden="true">→</span></button>
-  </form><div class="zm-login-small-note"><span aria-hidden="true">◇</span>{{ __('marketplace.login_only_pro') }}</div><a class="zm-login-back" href="{{ route('marketplace.home') }}">← {{ __('marketplace.back_to_marketplace') }}</a></div>
+  </form><div class="zm-login-small-note"><span aria-hidden="true">◇</span>{{ __('marketplace.login_only_pro') }}</div><a class="zm-login-back" href="{{ route('buyer.login') }}">{{ __('buyer.space') }} →</a><a class="zm-login-back" href="{{ route('marketplace.home') }}">← {{ __('marketplace.back_to_marketplace') }}</a></div>
 </div></section>
 @endsection

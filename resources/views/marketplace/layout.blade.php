@@ -27,6 +27,7 @@
         <a href="{{ route('marketplace.home') }}" @if(request()->routeIs('marketplace.home')) aria-current="page" @endif>{{ __('marketplace.navigation_home') }}</a>
         <a href="{{ route('marketplace.products') }}" @if(request()->routeIs('marketplace.products', 'marketplace.products.*')) aria-current="page" @endif>{{ __('marketplace.navigation_products') }}</a>
         <a href="{{ route('marketplace.stores') }}" @if(request()->routeIs('marketplace.stores', 'marketplace.shops.*')) aria-current="page" @endif>{{ __('marketplace.navigation_stores') }}</a>
+        <a href="{{ route(auth('buyer')->check() ? 'buyer.account' : 'buyer.login') }}" @if(request()->routeIs('buyer.*')) aria-current="page" @endif>{{ __('buyer.space') }}</a>
       </nav>
       <div class="zm-nav-right">
         <details class="zm-header-search">

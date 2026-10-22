@@ -1,0 +1,12 @@
+/* Buyer identity uses the existing marketplace visual system. */
+.buyer-help { font-size: 12px; line-height: 1.6; color: #475569; margin: 8px 0 0; }
+.buyer-opt-in label { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.6; cursor: pointer; }
+.buyer-opt-in input { flex: none; width: 18px; height: 18px; margin-top: 2px; accent-color: #0F6B57; }
+.buyer-auth-links { display: grid; gap: 16px; margin-top: 24px; font-size: 13px; line-height: 1.7; }
+.buyer-auth-links p { margin: 0; }
+.buyer-auth-links a { color: #0F6B57; text-decoration: underline; text-underline-offset: 4px; }
+.buyer-account { max-width: 850px; overflow-wrap: anywhere; }
+.buyer-account-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 28px; }
+.buyer-account-actions form { margin: 0; }
+.buyer-auth-links a:focus-visible, .buyer-opt-in input:focus-visible { outline: 3px solid #0F6B57; outline-offset: 4px; }
+@media (max-width: 500px) { .buyer-account-actions { align-items: stretch; flex-direction: column; } .buyer-account-actions .zm-btn { width: 100%; } }
