@@ -112,3 +112,13 @@ indépendantes et l'édition d'un profil client restent hors périmètre.
 Branche active : `feat/customer-auth`, créée depuis le HEAD de `feat/marketplace`.
 Tous les changements locaux sont conservés ; aucun fichier indexé, commit ou push.
 `ZEMBOA_BUSINESS_OVERVIEW.md` reste le compte rendu historique précédant cette implémentation.
+
+## Évolution avant 17.3 — téléphone et e-mail facultatif
+
+Le contrat initial ci-dessus est historique. Voir docs/BUYER_IDENTITY_PHONE_PHASE17.md
+pour l'évolution actuelle : téléphone obligatoire aux nouvelles inscriptions, e-mail
+facultatif, identifiant téléphone/e-mail, clé téléphonique acheteur calculée et unique,
+refus des collisions historiques et protection avant migration. Les anciens comptes
+sans téléphone ne sont pas modifiés automatiquement. Aucun numéro n'est vérifié par SMS.
+La migration nouvelle et celle is_buyer ne sont pas présumées appliquées à MySQL.
+Aucune nouvelle migration n'est appliquée sur DEMO dans cette intervention.

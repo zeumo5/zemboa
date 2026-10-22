@@ -1,6 +1,16 @@
 <?php
 
 return [
+    'setup_required' => 'Buyer registration is temporarily unavailable pending the identity database update.',
+    'phone' => 'Phone number',
+    'phone_hint' => 'Cameroon number, e.g. 690000001 or +237690000001. No SMS verification is available yet.',
+    'phone_invalid' => 'Enter a valid Cameroon mobile number.',
+    'phone_used' => 'These contact details are already in use. Sign in to your existing account.',
+    'email_optional' => 'Email address (optional)',
+    'identifier' => 'Phone number or email address',
+    'identifier_invalid' => 'Enter a valid Cameroon phone number or email address.',
+    'phone_missing' => 'Not provided',
+    'phone_unverified' => 'Phone numbers are not verified by SMS. Never share your password.',
     'space' => 'Customer space',
     'register_title' => 'Create your ZEMBOA account',
     'login_title' => 'Sign in to your customer space',
@@ -19,7 +29,7 @@ return [
     'not_registered' => 'New to ZEMBOA?',
     'professional' => 'Go to my professional space',
     'enable_buyer' => 'I already have a professional account and also want to activate my customer space with these credentials.',
-    'enable_hint' => 'Activation does not change your store or professional permissions. Customer and professional sign-ins remain separate.',
+    'enable_hint' => 'This requires your professional password, explicit consent, and a valid, unambiguous phone number on your existing account. Professional permissions remain unchanged.',
     'account_title' => 'My customer account',
     'welcome' => 'Welcome, :name',
     'account_ready' => 'Your ZEMBOA customer space is active.',

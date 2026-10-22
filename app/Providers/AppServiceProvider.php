@@ -39,10 +39,10 @@ class AppServiceProvider extends ServiceProvider
     {
         $response = fn () => response(__('buyer.throttled'), 429);
         \Illuminate\Support\Facades\RateLimiter::for('buyer.login', function (\Illuminate\Http\Request $request) use ($response) {
-            $email = is_string($request->input('email')) ? strtolower(trim($request->input('email'))) : '';
+            $identifier = \App\Support\BuyerIdentity::identifier($request->input('identifier', $request->input('email')));
 
             return [
-                \Illuminate\Cache\RateLimiting\Limit::perMinute(5)->by('buyer-login:'.$request->ip().'|'.hash('sha256', $email))->response($response),
+                \Illuminate\Cache\RateLimiting\Limit::perMinute(5)->by('buyer-login:'.$request->ip().'|'.hash('sha256', $identifier))->response($response),
                 \Illuminate\Cache\RateLimiting\Limit::perMinute(30)->by('buyer-login-ip:'.$request->ip())->response($response),
             ];
         });

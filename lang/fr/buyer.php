@@ -1,6 +1,16 @@
 <?php
 
 return [
+    'setup_required' => 'L’inscription acheteur est temporairement indisponible en attente de la mise à jour de la base d’identité.',
+    'phone' => 'Numéro de téléphone',
+    'phone_hint' => 'Numéro camerounais, par exemple 690000001 ou +237690000001. La vérification SMS est indisponible pour le moment.',
+    'phone_invalid' => 'Saisissez un numéro mobile camerounais valide.',
+    'phone_used' => 'Ces coordonnées sont déjà utilisées. Connectez-vous à votre compte existant.',
+    'email_optional' => 'Adresse e-mail (facultative)',
+    'identifier' => 'Téléphone ou adresse e-mail',
+    'identifier_invalid' => 'Saisissez un téléphone camerounais ou une adresse e-mail valide.',
+    'phone_missing' => 'Non renseigné',
+    'phone_unverified' => 'Les numéros ne sont pas vérifiés par SMS. Ne partagez jamais votre mot de passe.',
     'space' => 'Espace client',
     'register_title' => 'Créez votre compte ZEMBOA',
     'login_title' => 'Retrouvez votre espace client',
@@ -19,7 +29,7 @@ return [
     'not_registered' => 'Vous découvrez ZEMBOA ?',
     'professional' => 'Accéder à mon espace professionnel',
     'enable_buyer' => 'J’ai déjà un compte professionnel et je souhaite aussi activer mon espace client avec ces identifiants.',
-    'enable_hint' => 'Cette activation ne change ni votre boutique ni vos permissions professionnelles. Les connexions client et professionnelle restent distinctes.',
+    'enable_hint' => 'Votre mot de passe professionnel, votre consentement et un téléphone valide non ambigu sur votre compte existant sont requis. Les permissions professionnelles restent inchangées.',
     'account_title' => 'Mon compte client',
     'welcome' => 'Bienvenue, :name',
     'account_ready' => 'Votre espace client ZEMBOA est actif.',

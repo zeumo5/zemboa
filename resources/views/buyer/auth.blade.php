@@ -14,7 +14,12 @@
     <form method="post" action="{{ route($register ? 'buyer.register.store' : 'buyer.login.store') }}" class="zm-auth-form">
       @csrf
       @if($register)<div class="zm-field"><label for="buyer-name">{{ __('buyer.name') }}</label><input id="buyer-name" name="name" autocomplete="name" maxlength="150" value="{{ old('name') }}" required @error('name') aria-invalid="true" @enderror></div>@endif
-      <div class="zm-field"><label for="buyer-email">{{ __('buyer.email') }}</label><input id="buyer-email" name="email" type="email" inputmode="email" autocomplete="username" maxlength="254" value="{{ old('email') }}" required @error('email') aria-invalid="true" @enderror></div>
+      @if($register)
+        <div class="zm-field"><label for="buyer-phone">{{ __('buyer.phone') }}</label><input id="buyer-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" maxlength="64" value="{{ old('phone') }}" required aria-describedby="buyer-phone-hint" @error('phone') aria-invalid="true" @enderror><p id="buyer-phone-hint" class="buyer-help">{{ __('buyer.phone_hint') }}</p></div>
+        <div class="zm-field"><label for="buyer-email">{{ __('buyer.email_optional') }}</label><input id="buyer-email" name="email" type="email" inputmode="email" autocomplete="email" maxlength="254" value="{{ old('email') }}" @error('email') aria-invalid="true" @enderror></div>
+      @else
+        <div class="zm-field"><label for="buyer-identifier">{{ __('buyer.identifier') }}</label><input id="buyer-identifier" name="identifier" autocomplete="username" maxlength="254" value="{{ old('identifier', old('email')) }}" required @error('identifier') aria-invalid="true" @enderror></div>
+      @endif
       <div class="zm-field"><label for="buyer-password">{{ __('buyer.password') }}</label><input id="buyer-password" name="password" type="password" autocomplete="{{ $register ? 'new-password' : 'current-password' }}" maxlength="255" @if($register) minlength="12" aria-describedby="buyer-password-hint" @endif required @error('password') aria-invalid="true" @enderror>@if($register)<p id="buyer-password-hint" class="buyer-help">{{ __('buyer.password_hint') }}</p>@endif</div>
       @if($register)
         <div class="zm-field"><label for="buyer-confirmation">{{ __('buyer.password_confirmation') }}</label><input id="buyer-confirmation" name="password_confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="255" required></div>
