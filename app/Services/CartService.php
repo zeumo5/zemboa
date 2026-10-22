@@ -57,6 +57,7 @@ public function summary(): array
         ) {
             $details[] = [
                 'product_variant_id' => (int) $variantId,
+                'product_id' => $variant?->product?->id,
                 'quantity' => $quantity,
                 'available' => false,
                 'message' => 'Article indisponible.',
@@ -81,6 +82,7 @@ public function summary(): array
 
         $details[] = [
             'product_variant_id' => $variant->id,
+            'product_id' => $variant->product->id,
             'product_name' => $variant->product->name,
             'sku' => $variant->sku,
             'quantity' => $quantity,
@@ -105,9 +107,39 @@ public function summary(): array
         'details' => $details,
         'totals' => $totals,
         'can_checkout' => $canCheckout,
+        'counts' => self::countDetails($details),
+        'products_subtotal' => $totals['total'],
     ];
 }
 
+    /** Read-only badge projection, also usable outside a tenant route. */
+    public static function sessionCounts(): array
+    {
+        $cart = session(self::SESSION_KEY, []);
+        $items = $cart['items'] ?? [];
+        if (!$items) return self::countDetails([]);
+        // Never remove tenant filtering implicitly: both sides are explicitly scoped.
+        $products = \Illuminate\Support\Facades\DB::table('product_variants as v')
+            ->join('products as p', 'p.id', '=', 'v.product_id')
+            ->where('v.store_id', (int) ($cart['store_id'] ?? 0))
+            ->where('p.store_id', (int) ($cart['store_id'] ?? 0))
+            ->whereIn('v.id', array_keys($items))
+            ->get(['p.id as product_id', 'v.id as variant_id'])->pluck('product_id', 'variant_id');
+        $details = [];
+        foreach ($items as $id => $quantity) {
+            $details[] = ['product_id' => $products[$id] ?? null, 'quantity' => $quantity];
+        }
+        return self::countDetails($details);
+    }
+
+    private static function countDetails(array $details): array
+    {
+        return [
+            'distinct_products' => count(array_unique(array_filter(array_column($details, 'product_id')))),
+            'units' => array_sum(array_column($details, 'quantity')),
+            'unidentified_lines' => count(array_filter($details, fn ($line) => empty($line['product_id']))),
+        ];
+    }
 
     public function add(int $variantId, int $quantity): array
     {
@@ -165,8 +197,40 @@ public function summary(): array
 
    public function clear(): void
 {
+    $this->editableItems();
     session()->forget(self::SESSION_KEY);
 }
+
+
+    /** Public owner metadata and an opaque, session/state/target-bound confirmation. */
+    public function foreignCart(): ?array
+    {
+        $cart = session(self::SESSION_KEY, []);
+        if (empty($cart['items']) || (int) ($cart['store_id'] ?? 0) === $this->storeId()) return null;
+        $owner = \App\Models\Store::query()->where('status', 'ACTIVE')->find((int) ($cart['store_id'] ?? 0));
+        return [
+            'cart_url' => $owner ? route('marketplace.shops.cart', ['shopSlug' => $owner->slug]) : null,
+            'confirmation_token' => $owner ? $this->switchToken($cart) : null,
+            'switch_url' => $owner ? route('public.shops.cart.switch', ['shopSlug' => app(TenantContext::class)->store()->slug]) : null,
+        ];
+    }
+
+    public function switchStore(string $confirmationToken): void
+    {
+        $cart = session(self::SESSION_KEY, []);
+        $foreign = $this->foreignCart();
+        if (!$foreign || !$foreign['confirmation_token'] || !hash_equals($foreign['confirmation_token'], $confirmationToken)) {
+            throw ValidationException::withMessages(['confirmation_token' => 'Cart confirmation is obsolete or unavailable.']);
+        }
+        // Deliberately separate from clear(): explicit abandonment of this session only.
+        session()->forget(self::SESSION_KEY);
+    }
+
+    private function switchToken(array $cart): string
+    {
+        abort_unless(is_string(config('app.key')) && strlen(config('app.key')) >= 32, 503);
+        return hash_hmac('sha256', session()->getId().'|'.$this->storeId().'|'.serialize($cart), (string) config('app.key'));
+    }
 
     private function editableItems(): array
     {
@@ -235,6 +299,7 @@ public function summary(): array
         session()->put(self::SESSION_KEY, [
             'store_id' => $this->storeId(),
             'items' => $items,
+            'revision' => bin2hex(random_bytes(16)),
         ]);
     }
 

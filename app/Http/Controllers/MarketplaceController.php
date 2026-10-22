@@ -121,7 +121,7 @@ final class MarketplaceController extends Controller
             ->paginate(12)->withQueryString();
         $variantGroups = ProductVariant::query()->where('store_id', $store->id)
             ->where('status', 'ACTIVE')->whereIn('product_id', $products->pluck('id'))
-            ->with('stockLevel')->orderByDesc('is_default')->orderBy('id')->get()->groupBy('product_id');
+            ->with(['stockLevel', 'attributeValues.attribute'])->orderByDesc('is_default')->orderBy('id')->get()->groupBy('product_id');
         $view = $page === 'home' ? 'marketplace.shop' : 'marketplace.merchant.'.$page;
 
         return view($view, compact('store', 'settings', 'search', 'categories', 'selectedCategory', 'products', 'variantGroups'));
@@ -136,11 +136,24 @@ final class MarketplaceController extends Controller
         $settings = $store->settings()->where('store_id', $store->id)->first();
         $variants = ProductVariant::query()->where('store_id', $store->id)
             ->where('product_id', $item->id)->where('status', 'ACTIVE')
-            ->with(['stockLevel', 'attributeValues'])->orderByDesc('is_default')->orderBy('id')->get();
+            ->with(['stockLevel', 'attributeValues.attribute'])->orderByDesc('is_default')->orderBy('id')->get();
         $images = ProductImage::query()->where('store_id', $store->id)->where('product_id', $item->id)
             ->orderByDesc('is_primary')->orderBy('position')->orderBy('id')->get();
 
         return view('marketplace.product', compact('store', 'item', 'settings', 'variants', 'images'));
+    }
+
+    public function cart(string $shopSlug): View
+    {
+        $store = app(TenantContext::class)->store();
+        abort_unless($store->slug === $shopSlug && $store->status === 'ACTIVE', 404);
+        $settings = $store->settings()->where('store_id', $store->id)->first();
+        $saved = session('zemboa.cart', []);
+        $hasForeignCart = !empty($saved['items']) && (int) ($saved['store_id'] ?? 0) !== $store->id;
+        $otherStore = $hasForeignCart
+            ? Store::query()->where('status', 'ACTIVE')->find((int) ($saved['store_id'] ?? 0)) : null;
+
+        return view('marketplace.merchant.cart', compact('store', 'settings', 'otherStore', 'hasForeignCart'));
     }
 
     private function search(Request $request): string
@@ -185,7 +198,21 @@ final class MarketplaceController extends Controller
             ->orderBy('photo.id')
             ->limit(1);
 
+        // One aggregate joined to the paginated query; no per-card stock queries.
+        $cartVariants = DB::table('product_variants as cv')
+            ->leftJoin('stock_levels as cs', function ($join): void {
+                $join->on('cs.product_variant_id', '=', 'cv.id')->on('cs.store_id', '=', 'cv.store_id');
+            })
+            ->where('cv.status', 'ACTIVE')
+            ->groupBy('cv.store_id', 'cv.product_id')
+            ->select('cv.store_id', 'cv.product_id')
+            ->selectRaw('COUNT(*) as variant_count, MIN(cv.id) as variant_id')
+            ->selectRaw('SUM(CASE WHEN cs.physical_quantity > cs.reserved_quantity THEN 1 ELSE 0 END) as available_count');
+
         $query = DB::table('products as p')
+            ->joinSub($cartVariants, 'cart_variants', function ($join): void {
+                $join->on('cart_variants.product_id', '=', 'p.id')->on('cart_variants.store_id', '=', 'p.store_id');
+            })
             ->join('stores as s', function ($join): void {
                 $join->on('s.id', '=', 'p.store_id')
                     ->where('s.status', '=', 'ACTIVE');
@@ -206,6 +233,9 @@ final class MarketplaceController extends Controller
             ->select([
                 'p.id', 'p.store_id', 'p.name', 'p.slug',
                 'p.description', 'p.is_featured',
+                'cart_variants.variant_count as cart_variant_count',
+                'cart_variants.variant_id as cart_variant_id',
+                'cart_variants.available_count as cart_available_count',
                 's.name as store_name', 's.slug as store_slug',
                 'c.name as category_name',
             ])

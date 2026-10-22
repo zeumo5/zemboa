@@ -12,9 +12,9 @@
   @if(app()->environment('demo'))<span class="merchant-demo-tag">{{ __('marketplace.storefront.demo_image') }}</span>@endif</a>
   <div class="merchant-product-body"><span class="merchant-product-category">{{ $product->category_name }}</span><h3><a href="{{ route('marketplace.products.show', ['shopSlug' => $store->slug, 'product' => $product->id]) }}">{{ $product->name }}</a></h3>
     <div class="merchant-product-price"><strong>{{ $product->display_price === null ? __('marketplace.price_unavailable') : number_format((float) $product->display_price, 0, ',', ' ') . ' FCFA' }}</strong>@if($available || $knownUnavailable)<span class="merchant-stock @if($knownUnavailable) merchant-stock-empty @endif">{{ $available ? __('marketplace.storefront.stock') : __('marketplace.storefront.out') }}</span>@endif</div>
-    <a class="merchant-product-action" href="{{ route('marketplace.products.show', ['shopSlug' => $store->slug, 'product' => $product->id]) }}">{{ __('marketplace.storefront.view_details') }}<span aria-hidden="true">↗</span></a>
+    @include('marketplace.partials.cart-card-action')
   </div>
-  <details class="zm-merchant-variants"><summary>{{ __('marketplace.storefront.variants') }}</summary><ul>@foreach($cardVariants as $variant)<li>{{ $variant->sku }} · {{ number_format((float) $variant->effectivePrice(), 0, ',', ' ') }} FCFA · {{ !$variant->stockLevel ? __('marketplace.storefront.stock_unknown') : ($variant->stockLevel->availableQuantity() > 0 ? __('marketplace.storefront.stock') : __('marketplace.storefront.out')) }}</li>@endforeach</ul></details>
+  <details class="zm-merchant-variants"><summary>{{ __('marketplace.storefront.variants') }}</summary><ul>@foreach($cardVariants as $variant)<li>@include('marketplace.partials.variant-label') · {{ number_format((float) $variant->effectivePrice(), 0, ',', ' ') }} FCFA · {{ !$variant->stockLevel ? __('marketplace.storefront.stock_unknown') : ($variant->stockLevel->availableQuantity() > 0 ? __('marketplace.storefront.stock') : __('marketplace.storefront.out')) }}</li>@endforeach</ul></details>
 </article>
 @endforeach</div>
 @if($products->hasPages())

@@ -29,6 +29,7 @@
       <label class="zm-sr-only" for="merchant-q">{{ __('marketplace.storefront.search') }}</label><input id="merchant-q" type="search" name="q" maxlength="80" value="{{ $search ?? '' }}" placeholder="{{ __('marketplace.storefront.search') }}"><button type="submit">{{ __('marketplace.search_button') }}</button>
     </form>
     <div class="merchant-header-actions">
+    @include('marketplace.partials.cart-link', ['merchantCartStore' => $store])
     <a class="merchant-explore" href="{{ route('marketplace.stores') }}">{{ __('marketplace.storefront.explore_stores') }}</a>
     <button class="merchant-menu-trigger" type="button" data-merchant-open aria-controls="merchant-drawer" aria-expanded="false" aria-label="{{ __('marketplace.storefront.open_nav') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
     <details class="merchant-language"><summary>{{ strtoupper(app()->getLocale()) }}</summary><div>
@@ -49,4 +50,5 @@
     <a class="merchant-explore" href="{{ route('marketplace.stores') }}">{{ __('marketplace.storefront.explore_stores') }}</a>
   </dialog>
   @include('marketplace.merchant.footer')
+@include('marketplace.partials.cart-config')
 </body></html>

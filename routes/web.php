@@ -627,6 +627,9 @@ Route::prefix('shops/{shopSlug}')
             ->whereNumber('product')
             ->name('products.show');
 
+        Route::post('/cart/switch', [PublicCartController::class, 'switchStore'])
+            ->name('cart.switch');
+
         // Panier client public
 
         Route::get(
@@ -681,6 +684,7 @@ Route::prefix('boutiques/{shopSlug}')
     ->group(function () {
         Route::get('/', [MarketplaceController::class, 'shop'])->name('shops.show');
         Route::get('/produits', [MarketplaceController::class, 'shop'])->name('shops.products');
+        Route::get('/panier', [MarketplaceController::class, 'cart'])->name('shops.cart');
         Route::get('/categories', [MarketplaceController::class, 'shop'])->name('shops.categories');
         Route::get('/a-propos', [MarketplaceController::class, 'shop'])->name('shops.about');
         Route::get('/livraison-retrait', [MarketplaceController::class, 'shop'])->name('shops.services');

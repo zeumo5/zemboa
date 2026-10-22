@@ -285,7 +285,7 @@ class BuyerAuthenticationTest extends TestCase
         // File cache only, in a unique test directory; database stays SQLite :memory:.
         $this->app->useStoragePath(storage_path('framework/testing/buyer-limiter-'.bin2hex(random_bytes(8))));
         try {
-            config(['cache' => require base_path('bootstrap/demo-cache.php')]);
+            config(['cache' => require base_path('bootstrap/demo-cache.php'), 'session.block_store' => 'demo_limiter']);
             $this->assertSame('array', config('cache.default'));
             $this->assertSame('file', config('cache.stores.demo_limiter.driver'));
             $this->assertSame(['array', 'demo_limiter'], array_keys(config('cache.stores')));

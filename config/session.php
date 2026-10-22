@@ -20,6 +20,12 @@ return [
 
     'driver' => env('SESSION_DRIVER', 'database'),
 
+    // All web requests share the same native lock, acquired before session reads.
+    // Multi-node deployments must explicitly select a shared Redis cache store.
+    'block_store' => env('SESSION_BLOCK_STORE', 'file'),
+    'block_lock_seconds' => (int) env('SESSION_BLOCK_LOCK_SECONDS', 120),
+    'block_wait_seconds' => (int) env('SESSION_BLOCK_WAIT_SECONDS', 10),
+
     /*
     |--------------------------------------------------------------------------
     | Session Lifetime

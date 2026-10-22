@@ -20,7 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
     ->withMiddleware(function (Middleware $middleware): void {
 
-        $middleware->web(append: [
+        $middleware->web(prepend: [\App\Http\Middleware\UseCartSessionLocks::class], append: [
             SetLocale::class,
         ]);
 

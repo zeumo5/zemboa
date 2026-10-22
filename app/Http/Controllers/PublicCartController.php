@@ -85,16 +85,32 @@ class PublicCartController extends Controller
     }
 
 
-private function response(): JsonResponse
+    public function switchStore(Request $request, string $shopSlug): JsonResponse
+    {
+        $data = $request->validate(['confirmation_token' => ['required', 'string', 'size:64']]);
+        $this->cart->switchStore($data['confirmation_token']);
+        return $this->response(true);
+    }
+
+private function response(bool $switched = false): JsonResponse
 {
     $summary = $this->cart->summary();
 
     return response()->json([
         'data' => [
+            'store' => [
+                'id' => app(\App\Support\TenantContext::class)->store()->id,
+                'name' => app(\App\Support\TenantContext::class)->store()->name,
+            ],
+            'cart_url' => route('marketplace.shops.cart', ['shopSlug' => app(\App\Support\TenantContext::class)->store()->slug]),
             'items' => $this->cart->items(),
             'details' => $summary['details'],
             'totals' => $summary['totals'],
+            'counts' => $summary['counts'],
+            'products_subtotal' => $summary['products_subtotal'],
             'can_checkout' => $summary['can_checkout'],
+            'foreign_cart' => $this->cart->foreignCart(),
+            'cart_switched' => $switched,
         ],
     ]);
 }
