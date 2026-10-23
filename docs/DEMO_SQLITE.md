@@ -1,5 +1,18 @@
 # Démonstration SQLite — phase 16
 
+## Checkout — préparation 17.3B sans migration persistante
+
+Voir [CHECKOUT_PHASE17_3B_VALIDATION.md](CHECKOUT_PHASE17_3B_VALIDATION.md) pour les
+dépendances is_buyer / identité téléphonique / propriété-idempotence, la sauvegarde
+cohérente avec WAL, les gardes du lanceur et les autorisations nécessaires aux essais
+Chrome. Aucun nombre de migrations en attente n'est confirmé sans consultation autorisée
+de l'historique local. tools/demo.php migrate applique toutes les migrations absentes,
+sans filtre --path : ne pas l'exécuter pour une sélection partiellement autorisée.
+L'expiration automatique est désactivée par défaut et la commande préparée refuse le
+mode DEMO. Ouvrir le serveur ne doit pas activer des traitements de commandes existantes.
+Les tests checkout créent des commandes uniquement en SQLite :memory: ; les créations
+dans SQLite DEMO pour Chrome exigent une autorisation distincte et ne sont pas en lecture seule.
+
 ## État actuel et utilisation quotidienne
 
 La base SQLite DEMO locale a déjà été initialisée et sert à la présentation des interfaces.

@@ -25,3 +25,10 @@
 }
 
 @import './cart.css';
+@import './commerce.css';
+
+@import './product.css';
+
+@import './catalog.css';
+
+@import './categories.css';

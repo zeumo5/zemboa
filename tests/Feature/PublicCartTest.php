@@ -665,6 +665,11 @@ class PublicCartTest extends TestCase
         $attribute = \App\Models\Attribute::create(['name' => 'Taille', 'slug' => 'taille', 'status' => 'ACTIVE']);
         $value = \App\Models\AttributeValue::create(['attribute_id' => $attribute->id, 'value' => 'M']);
         app(\App\Actions\ProductVariant\AttachAttributeValue::class)->execute($a->id, $value->id);
+        \App\Models\ProductImage::create(['product_id' => $a->product_id, 'path' => 'catalog/memory-test.jpg', 'is_primary' => true, 'position' => 0]);
+        $this->postJson('/shops/alpha/cart/items', ['product_variant_id' => $a->id, 'quantity' => 1])->assertOk()
+            ->assertJsonPath('data.details.0.variant_label', 'Taille: M')
+            ->assertJsonPath('data.details.0.image_url', \Illuminate\Support\Facades\Storage::disk('public')->url('catalog/memory-test.jpg'))
+            ->assertJsonPath('data.details.0.product_url', route('marketplace.products.show', ['shopSlug' => 'alpha', 'product' => $a->product_id]));
         $this->get('/boutiques/alpha/produits/'.$a->product_id)->assertOk()->assertSee('Taille: M');
         $this->get('/boutiques/alpha/produits')->assertOk()->assertSee('Taille: M');
     }

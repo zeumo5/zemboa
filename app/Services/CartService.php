@@ -41,7 +41,7 @@ public function summary(): array
 
         // Recherche limitée à la boutique courante.
         $variant = ProductVariant::query()
-            ->with(['product.category', 'stockLevel'])
+            ->with(['product.category', 'product.images' => fn ($query) => $query->orderByDesc('is_primary')->orderBy('position')->orderBy('id'), 'attributeValues.attribute', 'stockLevel'])
             ->find((int) $variantId);
 
         // Un article retiré du catalogue reste visible
@@ -85,6 +85,11 @@ public function summary(): array
             'product_id' => $variant->product->id,
             'product_name' => $variant->product->name,
             'sku' => $variant->sku,
+            'variant_label' => $variant->attributeValues->filter(fn ($value) => $value->attribute !== null)
+                ->map(fn ($value) => $value->attribute->name.': '.$value->value)->implode(' / '),
+            'image_url' => ($image = $variant->product->images->first())
+                ? \Illuminate\Support\Facades\Storage::disk('public')->url($image->path) : null,
+            'product_url' => route('marketplace.products.show', ['shopSlug' => app(TenantContext::class)->store()->slug, 'product' => $variant->product->id]),
             'quantity' => $quantity,
             'unit_price' => $unitFcfa . '.00',
             'final_unit_price' => $finalFcfa . '.00',

@@ -665,8 +665,8 @@ Route::prefix('shops/{shopSlug}')
             '/checkout',
             [PublicCheckoutController::class, 'store']
         )
-            ->block(30, 10)
             ->name('checkout.store');
+        Route::get('/checkout', [PublicCheckoutController::class, 'show'])->name('checkout.show');
     });
 
 
@@ -685,6 +685,10 @@ Route::prefix('boutiques/{shopSlug}')
         Route::get('/', [MarketplaceController::class, 'shop'])->name('shops.show');
         Route::get('/produits', [MarketplaceController::class, 'shop'])->name('shops.products');
         Route::get('/panier', [MarketplaceController::class, 'cart'])->name('shops.cart');
+        Route::get('/commande', [PublicCheckoutController::class, 'show'])->name('shops.checkout');
+        Route::post('/commande', [PublicCheckoutController::class, 'store'])->name('shops.checkout.store');
+        Route::get('/commande/{orderId}/confirmation', [PublicCheckoutController::class, 'receipt'])
+            ->whereNumber('orderId')->name('shops.checkout.receipt');
         Route::get('/categories', [MarketplaceController::class, 'shop'])->name('shops.categories');
         Route::get('/a-propos', [MarketplaceController::class, 'shop'])->name('shops.about');
         Route::get('/livraison-retrait', [MarketplaceController::class, 'shop'])->name('shops.services');

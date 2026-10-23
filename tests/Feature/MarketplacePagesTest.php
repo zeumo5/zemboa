@@ -153,4 +153,48 @@ class MarketplacePagesTest extends TestCase
         $this->withSession(['locale' => 'en'])->get('/boutiques/alpha/livraison-retrait')->assertOk()
             ->assertSee('Store pickup offered')->assertDontSee('Delivery offered');
     }
+
+    public function test_category_counts_match_public_catalogue_without_tenant_leaks_or_pagination(): void
+    {
+        [$store, $productId] = $this->createPublicProduct('category-counts');
+        [, $foreignId] = $this->createPublicProduct('other-category-store');
+        $product = (array) DB::table('products')->find($productId);
+        $categoryId = $product['category_id'];
+        unset($product['id']);
+        $variant = (array) DB::table('product_variants')->where('product_id', $productId)->first();
+        unset($variant['id']);
+        for ($i = 0; $i < 13; $i++) {
+            $copyId = DB::table('products')->insertGetId(array_replace($product, ['name' => 'Public '.$i, 'slug' => 'public-'.$i]));
+            DB::table('product_variants')->insert(array_replace($variant, ['product_id' => $copyId, 'sku' => 'PUBLIC-'.$i]));
+        }
+        // Extra variants must not inflate the number of products.
+        DB::table('product_variants')->insert(array_replace($variant, ['sku' => 'SECOND-VARIANT', 'is_default' => false]));
+        $inactiveId = DB::table('products')->insertGetId(array_replace($product, ['name' => 'Hidden product', 'slug' => 'hidden-product', 'status' => 'INACTIVE']));
+        DB::table('product_variants')->insert(array_replace($variant, ['product_id' => $inactiveId, 'sku' => 'HIDDEN-PRODUCT']));
+        DB::table('products')->insert(array_replace($product, ['name' => 'No public variants', 'slug' => 'no-variants']));
+        DB::table('products')->where('id', $foreignId)->update(['category_id' => $categoryId]);
+        DB::table('categories')->insert([
+            ['store_id' => $store->id, 'name' => 'Empty collection', 'slug' => 'empty-collection', 'status' => 'ACTIVE'],
+            ['store_id' => $store->id, 'name' => 'Hidden collection', 'slug' => 'hidden-collection', 'status' => 'INACTIVE'],
+        ]);
+
+        $this->get('/boutiques/category-counts/categories')
+            ->assertOk()->assertViewHas('categories', function ($categories) use ($categoryId) {
+                return $categories->count() === 2
+                    && $categories->firstWhere('id', $categoryId)->public_products_count === 14
+                    && $categories->firstWhere('slug', 'empty-collection')->public_products_count === 0;
+            })
+            ->assertSee('premium-category-card')->assertSee('empty-collection')
+            ->assertDontSee('hidden-collection')->assertDontSee('Produit other-category-store')
+            ->assertDontSee('FCFA')->assertDontSee('data-cart-options');
+    }
+
+    public function test_category_page_handles_no_active_categories(): void
+    {
+        [$store] = $this->createPublicProduct('no-collections');
+        DB::table('categories')->where('store_id', $store->id)->update(['status' => 'INACTIVE']);
+        $this->get('/boutiques/no-collections/categories')->assertOk()
+            ->assertViewHas('categories', fn ($categories) => $categories->isEmpty())
+            ->assertSee('categories-empty')->assertDontSee('premium-category-card');
+    }
 }

@@ -203,15 +203,27 @@ if (page) {
         list.replaceChildren(); status.textContent = data.details.length ? '' : t.empty;
         for (const item of data.details) {
             const line = element('article', undefined, 'cart-line'); line.dataset.cartLine = item.product_variant_id;
-            line.append(element('h2', item.product_name || t.unavailable));
-            if (item.sku) line.append(element('p', item.sku));
-            if (item.final_unit_price !== undefined) line.append(element('p', `${money(item.final_unit_price)} \u00d7 ${item.quantity} = ${money(item.line_total)}`));
-            if (!item.available) line.append(element('p', t.unavailable));
+            const photo = element('div', undefined, 'commerce-photo');
+            if (item.image_url) {
+                const image = element('img'); image.src = item.image_url; image.alt = ''; image.loading = 'lazy'; image.width = 120; image.height = 120;
+                image.addEventListener('error', () => photo.replaceChildren(element('span', t.no_photo)), { once: true }); photo.append(image);
+            } else photo.append(element('span', t.no_photo));
+            const content = element('div', undefined, 'cart-line-content');
+            const heading = element('h2');
+            if (item.product_url) { const link = element('a', item.product_name); link.href = item.product_url; heading.append(link); }
+            else heading.textContent = item.product_name || t.unavailable;
+            content.append(heading);
+            if (item.variant_label) content.append(element('p', item.variant_label, 'commerce-variant'));
+            if (item.sku) { const reference = element('details', undefined, 'commerce-reference'); reference.append(element('summary', t.reference), element('span', item.sku)); content.append(reference); }
+            if (!item.available) content.append(element('p', t.unavailable, 'commerce-unavailable'));
+            const bottom = element('div', undefined, 'cart-line-bottom');
+            const unit = element('div', undefined, 'commerce-metric'); unit.append(element('span', t.unit_price), element('strong', item.final_unit_price === undefined ? '\u2014' : money(item.final_unit_price)));
+            const subtotal = element('div', undefined, 'commerce-metric'); subtotal.append(element('span', t.line_total), element('strong', item.line_total === undefined ? '\u2014' : money(item.line_total)));
             const form = element('form', undefined, 'cart-controls');
             const input = element('input'); input.type = 'number'; input.min = '1'; input.step = '1'; input.required = true; input.value = item.quantity; input.id = `cart-qty-${item.product_variant_id}`;
             const label = element('label', t.quantity); label.htmlFor = input.id;
-            const update = element('button', t.update, 'zm-btn zm-btn-dark'); update.type = 'submit';
-            const remove = element('button', t.remove, 'zm-btn zm-btn-light'); remove.type = 'button';
+            const update = element('button', t.update, 'cart-update-button'); update.type = 'submit';
+            const remove = element('button', t.remove, 'cart-remove-button'); remove.type = 'button';
             const url = `${page.dataset.itemsUrl}/${item.product_variant_id}`;
             let saveTimer;
             const saveQuantity = async () => {
@@ -229,9 +241,12 @@ if (page) {
             form.addEventListener('click', event => { if (event.target.closest('[data-step]')) { clearTimeout(saveTimer); saveTimer = setTimeout(saveQuantity, 220); } });
             form.addEventListener('submit', event => { event.preventDefault(); saveQuantity(); });
             remove.addEventListener('click', () => mutate(page, url, 'DELETE', undefined, t.removed));
-            form.append(label, stepper(input), update, remove); line.append(form); list.append(line);
+            form.append(label, stepper(input), update, remove);
+            bottom.append(unit, form, subtotal); content.append(bottom); line.append(photo, content); list.append(line);
         }
-        summary.hidden = false;
+        summary.hidden = data.details.length === 0;
+        const checkout = page.querySelector('[data-cart-checkout]');
+        if (checkout) checkout.hidden = !data.can_checkout;
         page.querySelector('[data-cart-products]').textContent = `${data.counts.distinct_products}${data.counts.unidentified_lines ? '+' : ''}`;
         page.querySelector('[data-cart-units]').textContent = data.counts.units;
         page.querySelector('[data-cart-total]').textContent = money(data.products_subtotal);

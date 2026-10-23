@@ -114,6 +114,17 @@ final class MarketplaceController extends Controller
         if ($selectedCategory !== '') {
             abort_unless($categories->contains('slug', $selectedCategory), 404);
         }
+        if ($page === 'categories') {
+            // Count exactly the catalogue's public products, once for all categories.
+            $counts = $this->publicProducts($store->id)
+                ->select('p.category_id')->selectRaw('COUNT(DISTINCT p.id) as public_products_count')
+                ->groupBy('p.category_id')->get()->keyBy('category_id');
+            foreach ($categories as $category) {
+                $category->setAttribute('public_products_count', (int) ($counts->get($category->id)?->public_products_count ?? 0));
+            }
+
+            return view('marketplace.merchant.categories', compact('store', 'settings', 'search', 'categories'));
+        }
         $products = $this->publicProducts($store->id)
             ->when($search !== '', fn (Builder $query) => $query->where('p.name', 'like', '%'.$search.'%'))
             ->when($selectedCategory !== '', fn (Builder $query) => $query->where('c.slug', $selectedCategory))

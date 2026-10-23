@@ -31,6 +31,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'reservation_expires_at',
     'balance_due_at',
 ])]
+#[\Illuminate\Database\Eloquent\Attributes\Hidden(['checkout_key_hash', 'checkout_request_hash', 'checkout_actor_hash'])]
 class Order extends Model
 {
     use BelongsToStore;
@@ -58,6 +59,7 @@ class Order extends Model
     protected function casts(): array
     {
         return [
+            'checkout_expires_at' => 'datetime',
             'subtotal' => 'decimal:2',
             'discount_amount' => 'decimal:2',
             'delivery_fee' => 'decimal:2',

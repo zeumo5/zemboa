@@ -1,6 +1,9 @@
 <?php
 
 return [
+    'unit_price' => 'Prix unitaire', 'line_total' => 'Sous-total', 'reference' => 'Référence',
+    'verified' => 'Prix et stock vérifiés par le serveur.', 'no_reservation' => 'Aucun stock réservé à cette étape.',
+    'no_photo' => 'Photo indisponible',
     'current_cart' => 'Voir mon panier actuel',
     'switch_store' => 'Changer de boutique',
     'switch_confirm' => 'Vous allez supprimer les articles de votre panier actuel pour commencer vos achats dans cette boutique. Continuer ?',

@@ -1,6 +1,9 @@
 <?php
 
 return [
+    'unit_price' => 'Unit price', 'line_total' => 'Subtotal', 'reference' => 'Reference',
+    'verified' => 'Prices and stock checked by the server.', 'no_reservation' => 'No stock reserved at this stage.',
+    'no_photo' => 'Photo unavailable',
     'current_cart' => 'View my current cart',
     'switch_store' => 'Change store',
     'switch_confirm' => 'You will remove the items in your current cart to start shopping in this store. Continue?',
