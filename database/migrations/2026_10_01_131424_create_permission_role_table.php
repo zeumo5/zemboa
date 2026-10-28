@@ -11,17 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-       Schema::create('permission_role', function (Blueprint $table) {
-    $table->foreignId('role_id')
-        ->constrained('roles')
-        ->cascadeOnDelete();
+        Schema::create('permission_role', function (Blueprint $table) {
+            $table->foreignId('role_id')
+                ->constrained('roles')
+                ->cascadeOnDelete();
 
-    $table->foreignId('permission_id')
-        ->constrained('permissions')
-        ->cascadeOnDelete();
+            $table->foreignId('permission_id')
+                ->constrained('permissions')
+                ->cascadeOnDelete();
 
-    $table->primary(['role_id', 'permission_id']);
-});
+            $table->primary(['role_id', 'permission_id']);
+        });
     }
 
     /**
@@ -29,6 +29,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('role_user');
+        Schema::dropIfExists('permission_role');
     }
 };
