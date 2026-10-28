@@ -1,11 +1,12 @@
 <?php
-namespace App\Actions\Deliveries;
 
+namespace App\Actions\Deliveries;
 
 use App\Models\Delivery;
 use App\Models\Order;
 use App\Models\StockReservation;
 use App\Models\User;
+use App\Support\DeliveryAccess;
 use App\Support\TenantContext;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -18,18 +19,18 @@ final class UpdateDeliveryStatus
         string $newStatus,
         ?string $failureReason = null
     ): Delivery {
-        if (!in_array($newStatus, [
+        if (! in_array($newStatus, [
             'PICKED_UP',
             'DELIVERED',
             'FAILED',
         ], true)) {
             throw ValidationException::withMessages([
-                'status' =>__('deliveries.invalid_status'),
+                'status' => __('deliveries.invalid_status'),
             ]);
         }
 
         $storeId = app(TenantContext::class)->storeId();
-        $user = auth()->user();
+        $user = DeliveryAccess::agent(auth('web')->user(), 'deliveries.update');
 
         if (
             ! $user instanceof User ||
@@ -50,16 +51,19 @@ final class UpdateDeliveryStatus
             $user
         ) {
             $deliveryLookup = Delivery::query()
+                ->where('store_id', $storeId)
                 ->whereKey($deliveryId)
                 ->firstOrFail();
 
             // Ordre de verrouillage : commande puis livraison.
             $order = Order::query()
+                ->where('store_id', $storeId)
                 ->whereKey($deliveryLookup->order_id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
             $delivery = Delivery::query()
+                ->where('store_id', $storeId)
                 ->whereKey($deliveryId)
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -88,17 +92,20 @@ final class UpdateDeliveryStatus
                 'PICKED_UP' => ['DELIVERED', 'FAILED'],
             ];
 
-            if (!in_array(
+            if (! in_array(
                 $newStatus,
                 $allowedTransitions[$delivery->status] ?? [],
                 true
             )) {
                 throw ValidationException::withMessages([
-                    'status' => __('deliveries.invalid_status_transition')
+                    'status' => __('deliveries.invalid_status_transition'),
                 ]);
             }
 
             if ($newStatus === 'PICKED_UP') {
+                if ((float) $order->delivery_fee <= 0 || trim((string) $order->delivery_address) === '') {
+                    throw ValidationException::withMessages(['order' => __('courier.delivery_details_required')]);
+                }
                 // Une commande impayée doit encore posséder
                 // une réservation valide.
                 if (
@@ -130,10 +137,15 @@ final class UpdateDeliveryStatus
             }
 
             if ($newStatus === 'DELIVERED') {
+                if ((float) $order->delivery_fee <= 0 || trim((string) $order->delivery_address) === '') {
+                    throw ValidationException::withMessages(['order' => __('courier.delivery_details_required')]);
+                }
+                if ($delivery->picked_up_at === null || $delivery->returned_at !== null) {
+                    throw ValidationException::withMessages(['status' => __('deliveries.invalid_status_transition')]);
+                }
                 if ($order->payment_status !== 'PAID') {
                     throw ValidationException::withMessages([
-                        'payment_status' =>
-                            __('deliveries.payment_required_before_delivery'),
+                        'payment_status' => __('deliveries.payment_required_before_delivery'),
                     ]);
                 }
 
@@ -145,8 +157,7 @@ final class UpdateDeliveryStatus
 
                 if ($reason === '' || mb_strlen($reason) > 1000) {
                     throw ValidationException::withMessages([
-                        'failure_reason' =>
-                            __('deliveries.failure_reason_required'),
+                        'failure_reason' => __('deliveries.failure_reason_required'),
                     ]);
                 }
 

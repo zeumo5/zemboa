@@ -1,53 +1,12 @@
-
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Activation du compte - ZEMBOA</title>
-</head>
-<body>
-    <h1>Bienvenue sur ZEMBOA</h1>
-
-    <p>Définissez votre mot de passe pour activer votre compte.</p>
-
-    @if ($errors->any())
-        <ul>
-            @foreach ($errors->all() as $error)
-                <li>{{ $error }}</li>
-            @endforeach
-        </ul>
-    @endif
-
-    <form method="POST"
-          action="{{ route('employee.invitation.accept', ['token' => $token]) }}">
-        @csrf
-
-        <input type="hidden" name="email" value="{{ $email }}">
-
-        <label for="password">Mot de passe</label>
-        <input
-            id="password"
-            type="password"
-            name="password"
-            minlength="12"
-            autocomplete="new-password"
-            required
-        >
-
-        <label for="password_confirmation">
-            Confirmer le mot de passe
-        </label>
-        <input
-            id="password_confirmation"
-            type="password"
-            name="password_confirmation"
-            minlength="12"
-            autocomplete="new-password"
-            required
-        >
-
-        <button type="submit">Activer mon compte</button>
-    </form>
-</body>
-</html>
+@extends('auth.layout')
+@section('title',__('team.activation_title'))
+@section('heading',__('team.activation_title'))
+@section('intro',__('team.activation_intro'))
+@section('form')
+<div class="auth-invite-store"><strong>{{ $invitationStore->name }}</strong><span>{{ __('team.roles.'.$invitationRole) }}</span></div>
+<form method="post" action="{{ route('employee.invitation.accept',['token'=>$token]) }}" class="auth-form">@csrf<input type="hidden" name="email" value="{{ $email }}">
+@include('auth.password',['passwordId'=>'password','passwordLabel'=>__('team.password'),'newPassword'=>true])
+<p class="auth-note">{{ __('buyer.password_hint') }}</p>
+@include('auth.password',['passwordId'=>'password_confirmation','passwordName'=>'password_confirmation','passwordLabel'=>__('team.confirmation'),'newPassword'=>true])
+<button type="submit" class="auth-submit">{{ __('team.activate') }}</button></form>
+@endsection

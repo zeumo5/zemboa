@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-
 use App\Models\Role;
 use App\Models\Store;
 use App\Models\User;
@@ -73,12 +72,13 @@ class EmployeeInvitationFlowTest extends TestCase
     private function inviteEmployee(
         string $role = 'STORE_MANAGER'
     ): array {
-        $email = 'employe-' . Str::lower(Str::random(10))
-            . '@example.test';
+        $email = 'employe-'.Str::lower(Str::random(10))
+            .'@example.test';
 
         $this->postJson(route('employees.store'), [
             'name' => 'Employé ZEMBOA',
             'email' => $email,
+            'phone' => '+23769'.random_int(1000000, 9999999),
             'role' => $role,
         ])
             ->assertCreated()
@@ -136,7 +136,7 @@ class EmployeeInvitationFlowTest extends TestCase
         foreach (['STORE_OWNER', 'SUPER_ADMIN'] as $role) {
             $this->postJson(route('employees.store'), [
                 'name' => 'Employé interdit',
-                'email' => Str::random(10) . '@example.test',
+                'email' => Str::random(10).'@example.test',
                 'role' => $role,
             ])
                 ->assertUnprocessable()

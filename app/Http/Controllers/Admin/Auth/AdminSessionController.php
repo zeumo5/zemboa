@@ -1,6 +1,6 @@
 <?php
-namespace App\Http\Controllers\Admin\Auth;
 
+namespace App\Http\Controllers\Admin\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
@@ -13,13 +13,6 @@ use Illuminate\View\View;
 
 class AdminSessionController extends Controller
 {
-    private const STORE_ROLES = [
-        'STORE_OWNER',
-        'STORE_MANAGER',
-        'CASHIER',
-        'DELIVERY_AGENT',
-    ];
-
     public function create(): View
     {
         return view('admin.login');
@@ -33,7 +26,7 @@ class AdminSessionController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $authenticated = Auth::attempt([
+        $authenticated = Auth::guard('web')->attempt([
             'email' => $credentials['email'],
             'password' => $credentials['password'],
             'status' => 'ACTIVE',
@@ -41,29 +34,24 @@ class AdminSessionController extends Controller
 
         if (! $authenticated) {
             throw ValidationException::withMessages([
-                'email' => 'Identifiants incorrects ou accès refusé.',
+                'email' => __('access.access_denied'),
             ]);
         }
 
-        $user = $request->user();
+        $user = $request->user('web');
 
         $isSuperAdmin =
             $user instanceof User &&
-            $user->status === 'ACTIVE' &&
-            $user->store_id === null &&
-            $user->hasRole('SUPER_ADMIN') &&
-            ! $user->roles()
-                ->whereIn('code', self::STORE_ROLES)
-                ->exists();
+            $user->canUseSuperAdminAccount();
 
         if (! $isSuperAdmin) {
-            Auth::logout();
+            Auth::guard('web')->logout();
 
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
             throw ValidationException::withMessages([
-                'email' => 'Identifiants incorrects ou accès refusé.',
+                'email' => __('access.access_denied'),
             ]);
         }
 
@@ -84,17 +72,10 @@ class AdminSessionController extends Controller
         return redirect()->route('admin.dashboard');
     }
 
-    public function dashboard(Request $request): View
-    {
-        return view('admin.dashboard', [
-            'admin' => $request->user(),
-        ]);
-    }
-
     public function destroy(
         Request $request
     ): JsonResponse|RedirectResponse {
-        Auth::logout();
+        Auth::guard('web')->logout();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();

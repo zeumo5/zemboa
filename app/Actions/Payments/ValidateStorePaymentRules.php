@@ -1,6 +1,6 @@
 <?php
-namespace App\Actions\Payments;
 
+namespace App\Actions\Payments;
 
 use App\Models\Order;
 use App\Models\StoreSetting;
@@ -51,15 +51,14 @@ final class ValidateStorePaymentRules
         $settings = StoreSetting::query()->first();
 
         // Compatibilité avec les boutiques non configurées.
-        if ($settings === null) {
-            return $newTotalPaid;
+        if ($settings === null || ! $settings->hasCommercialConfiguration()) {
+            throw ValidationException::withMessages(['amount' => __('payments.partial_configuration_required')]);
         }
 
         // Vérifier l'autorisation des paiements partiels.
-        if (!$settings->allow_partial_payments) {
+        if (! $settings->allow_partial_payments) {
             throw ValidationException::withMessages([
-                'amount' =>
-                    'Cette boutique refuse les paiements partiels.',
+                'amount' => 'Cette boutique refuse les paiements partiels.',
             ]);
         }
 
@@ -82,8 +81,7 @@ final class ValidateStorePaymentRules
 
             if ($newTotalPaid < $minimum) {
                 throw ValidationException::withMessages([
-                    'amount' =>
-                        'Le premier acompte est inférieur au minimum exigé par la boutique.',
+                    'amount' => 'Le premier acompte est inférieur au minimum exigé par la boutique.',
                 ]);
             }
         }

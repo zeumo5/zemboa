@@ -2,8 +2,9 @@
 @section('title', __('checkout.title'))
 @section('content')
 @php
-  $service = $settings && ($fulfillment === 'PICKUP' ? $settings->pickup_enabled : ($settings->delivery_enabled && $zone));
-  $canConfirm = $service && $summary['can_checkout'] && $token;
+  $commerceConfigured = $settings?->hasCommercialConfiguration() ?? false;
+  $service = $commerceConfigured && ($fulfillment === 'PICKUP' ? $settings->pickup_enabled : ($settings->delivery_enabled && $zone));
+  $canConfirm = $service && $summary['can_checkout'] && $token && app(\App\Actions\Orders\OrderPriceCalculator::class)->toFcfa($total['total']) > 0;
 @endphp
 <section class="merchant-section merchant-commerce commerce-checkout">
   <div class="checkout-layout">
@@ -15,6 +16,7 @@
       </header>
       @if($errors->any())<div class="commerce-errors" role="alert" tabindex="-1"><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
       <div class="commerce-assurance checkout-assurance">@include('marketplace.partials.commerce-icon', ['icon' => 'shield'])<div><strong>{{ __('checkout.unpaid') }}</strong><span>{{ __('checkout.notice') }}</span></div></div>
+      @if(app(\App\Actions\Orders\OrderPriceCalculator::class)->toFcfa($total['total']) === 0)<p class="commerce-errors" role="status">{{ __('promotions.zero_total') }}</p>@endif
       @unless($summary['can_checkout'])<p class="commerce-errors" role="status">{{ __('checkout.invalid_cart') }}</p>@endunless
       <section class="commerce-card">
         <div class="commerce-card-heading"><h2><span class="commerce-step">1</span>{{ __('checkout.articles') }}</h2><a class="commerce-text-action" href="{{ route('marketplace.shops.cart', ['shopSlug' => $store->slug]) }}">{{ __('checkout.edit_cart') }}</a></div>
@@ -24,12 +26,12 @@
         <div class="commerce-card-heading"><h2><span class="commerce-step">2</span>{{ __('checkout.fulfillment') }}</h2></div>
         <form method="get" action="{{ route('marketplace.shops.checkout', ['shopSlug' => $store->slug]) }}" class="checkout-mode-form">
           <fieldset><legend class="zm-sr-only">{{ __('checkout.fulfillment') }}</legend><div class="checkout-modes">
-            @if($settings?->pickup_enabled)<label class="checkout-mode" for="checkout-pickup"><input id="checkout-pickup" type="radio" name="fulfillment_type" value="PICKUP" @checked($fulfillment === 'PICKUP')><span class="commerce-icon-box">@include('marketplace.partials.commerce-icon', ['icon' => 'store'])</span><span><strong>{{ __('checkout.pickup') }}</strong><small>{{ __('checkout.pickup_help') }}</small></span></label>@endif
-            @if($settings?->delivery_enabled && $zones->isNotEmpty())<label class="checkout-mode" for="checkout-delivery"><input id="checkout-delivery" type="radio" name="fulfillment_type" value="DELIVERY" @checked($fulfillment === 'DELIVERY')><span class="commerce-icon-box">@include('marketplace.partials.commerce-icon', ['icon' => 'truck'])</span><span><strong>{{ __('checkout.delivery') }}</strong><small>{{ __('checkout.delivery_help') }}</small></span></label>@endif
+            @if($commerceConfigured && $settings?->pickup_enabled)<label class="checkout-mode" for="checkout-pickup"><input id="checkout-pickup" type="radio" name="fulfillment_type" value="PICKUP" @checked($fulfillment === 'PICKUP')><span class="commerce-icon-box">@include('marketplace.partials.commerce-icon', ['icon' => 'store'])</span><span><strong>{{ __('checkout.pickup') }}</strong><small>{{ __('checkout.pickup_help') }}</small></span></label>@endif
+            @if($commerceConfigured && $settings?->delivery_enabled && $zones->isNotEmpty())<label class="checkout-mode" for="checkout-delivery"><input id="checkout-delivery" type="radio" name="fulfillment_type" value="DELIVERY" @checked($fulfillment === 'DELIVERY')><span class="commerce-icon-box">@include('marketplace.partials.commerce-icon', ['icon' => 'truck'])</span><span><strong>{{ __('checkout.delivery') }}</strong><small>{{ __('checkout.delivery_help') }}</small></span></label>@endif
           </div></fieldset>
-          @if($settings?->delivery_enabled && $zones->isNotEmpty())<div class="zm-field"><label for="checkout-zone">{{ __('checkout.zone') }}</label><select id="checkout-zone" name="delivery_zone_id">@foreach($zones as $candidate)<option value="{{ $candidate->id }}" @selected($candidate->id === $zone?->id)>{{ $candidate->name }} — {{ $candidate->city }} · {{ number_format((float) $candidate->fee, 0, ',', ' ') }} FCFA</option>@endforeach</select></div>@endif
+          @if($commerceConfigured && $settings?->delivery_enabled && $zones->isNotEmpty())<div class="zm-field"><label for="checkout-zone">{{ __('checkout.zone') }}</label><select id="checkout-zone" name="delivery_zone_id">@foreach($zones as $candidate)<option value="{{ $candidate->id }}" @selected($candidate->id === $zone?->id)>{{ $candidate->name }} — {{ $candidate->city }} · {{ number_format((float) $candidate->fee, 0, ',', ' ') }} FCFA</option>@endforeach</select></div>@endif
           @if(!$service || ($settings?->pickup_enabled && $settings?->delivery_enabled && $zones->isNotEmpty()) || ($settings?->delivery_enabled && $zones->count() > 1))
-            <div class="checkout-mode-actions"><p class="commerce-muted">{{ __('checkout.mode_help') }}</p><button class="zm-btn commerce-secondary" type="submit" @disabled(!$settings || (!$settings->pickup_enabled && !$settings->delivery_enabled))>{{ __('checkout.refresh') }}</button></div>
+            <div class="checkout-mode-actions"><p class="commerce-muted">{{ __('checkout.mode_help') }}</p><button class="zm-btn commerce-secondary" type="submit" @disabled(!$commerceConfigured || (!$settings->pickup_enabled && !$settings->delivery_enabled))>{{ __('checkout.refresh') }}</button></div>
           @endif
         </form>
         @unless($service)<p class="commerce-errors" role="status">{{ __('checkout.no_service') }}</p>@endunless
@@ -56,7 +58,7 @@
     </div>
     <aside class="checkout-aside" aria-label="{{ __('checkout.summary') }}">
       <a class="commerce-merchant-card" href="{{ route('marketplace.shops.show', ['shopSlug' => $store->slug]) }}">
-        @if($settings?->logo_path)<img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($settings->logo_path) }}" width="50" height="50" alt="">@else<span class="commerce-merchant-letter">{{ mb_strtoupper(mb_substr(preg_replace('/^DEMO\s*-\s*/u', '', $store->name), 0, 1)) }}</span>@endif
+        @if($logoUrl = \App\Support\StoreBranding::url($settings,'logo'))<img src="{{ $logoUrl }}" width="50" height="50" alt="">@else<span class="commerce-merchant-letter">{{ mb_strtoupper(mb_substr(preg_replace('/^DEMO\s*-\s*/u', '', $store->name), 0, 1)) }}</span>@endif
         <span><strong>{{ $store->name }}</strong>@if($store->slogan)<small>{{ $store->slogan }}</small>@endif</span>
         @include('marketplace.partials.commerce-icon', ['icon' => 'store'])
       </a>

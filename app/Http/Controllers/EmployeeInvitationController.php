@@ -1,8 +1,9 @@
 <?php
+
 namespace App\Http\Controllers;
 
-
 use App\Models\User;
+use App\Support\EmployeeAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -25,7 +26,8 @@ class EmployeeInvitationController extends Controller
             $user === null ||
             $user->store === null ||
             $user->store->status !== 'ACTIVE' ||
-            !$user->roles()
+            ! EmployeeAccess::employee($user) ||
+            ! $user->roles()
                 ->whereIn('code', [
                     'STORE_MANAGER',
                     'CASHIER',
@@ -55,13 +57,15 @@ class EmployeeInvitationController extends Controller
 
         if (
             $employee === null ||
-            !Password::broker('users')
+            ! Password::broker('users')
                 ->tokenExists($employee, $token)
         ) {
-            abort(404, 'Invitation invalide ou expirée.');
+            abort(404, __('team.invalid_invitation'));
         }
 
         return view('employee-invitations.accept', [
+            'invitationStore' => $employee->store()->firstOrFail(),
+            'invitationRole' => $employee->roles()->value('code'),
             'token' => $token,
             'email' => $email,
         ]);
@@ -90,7 +94,7 @@ class EmployeeInvitationController extends Controller
 
         if ($employee === null) {
             throw ValidationException::withMessages([
-                'email' => 'Invitation invalide.',
+                'email' => __('team.invalid_invitation'),
             ]);
         }
 
@@ -99,13 +103,13 @@ class EmployeeInvitationController extends Controller
                 'email' => $data['email'],
                 'token' => $token,
                 'password' => $data['password'],
-                'password_confirmation' =>
-                    $request->input('password_confirmation'),
+                'password_confirmation' => $request->input('password_confirmation'),
             ],
-            function (User $user, string $password) {
+            function (User $user, string $password) use ($token) {
                 DB::transaction(function () use (
                     $user,
-                    $password
+                    $password,
+                    $token
                 ) {
                     $employee = User::query()
                         ->whereKey($user->id)
@@ -115,10 +119,10 @@ class EmployeeInvitationController extends Controller
                     if (
                         $this->eligibleEmployee(
                             $employee->email
-                        ) === null
+                        ) === null || ! Password::broker('users')->tokenExists($employee, $token)
                     ) {
                         throw ValidationException::withMessages([
-                            'email' => 'Invitation non autorisée.',
+                            'email' => __('team.invalid_invitation'),
                         ]);
                     }
 
@@ -134,8 +138,7 @@ class EmployeeInvitationController extends Controller
 
         if ($result !== Password::PASSWORD_RESET) {
             throw ValidationException::withMessages([
-                'email' =>
-                    'Invitation invalide ou expirée.',
+                'email' => __('team.invalid_invitation'),
             ]);
         }
 

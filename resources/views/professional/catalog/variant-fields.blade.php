@@ -1,0 +1,10 @@
+@php($value=fn($key,$fallback=null)=>old('_form')===$formKey?old($key,$fallback):$fallback)
+<input type="hidden" name="_form" value="{{ $formKey }}">
+@if($variant->exists)<input type="hidden" name="version" value="{{ $value('version',\App\Support\CatalogAccess::version($variant)) }}">@endif
+<div class="pc-fields"><label>{{ __('catalog.sku') }}<input name="sku" maxlength="100" value="{{ $value('sku',$variant->sku) }}" required></label>
+@if(\App\Support\CatalogPricing::writable($actor))<input type="hidden" name="promotion_timezone" value="{{ \App\Support\CatalogPricing::TIMEZONE }}"><label>{{ __('catalog.price') }}<input type="number" name="price" min="0" max="9999999999.99" step="0.01" value="{{ $value('price',$variant->price) }}" required></label>
+<label>{{ __('catalog.promo') }}<input type="number" name="promo_price" min="0" max="9999999999.99" step="0.01" value="{{ $value('promo_price',$variant->promo_price) }}"></label>
+@endif<label>{{ __('catalog.status') }}<select name="status">@foreach(['ACTIVE','INACTIVE'] as $state)<option value="{{ $state }}" @selected($value('status',$variant->status??'ACTIVE')===$state)>{{ __('catalog.'.$state) }}</option>@endforeach</select></label>
+@if(\App\Support\CatalogPricing::writable($actor))<label>{{ __('catalog.promo_start') }}<input type="datetime-local" name="promo_starts_at" value="{{ \App\Support\CatalogPricing::formDate($value('promo_starts_at',$variant->promo_starts_at?->copy()->timezone(\App\Support\CatalogPricing::TIMEZONE)->format('Y-m-d\TH:i'))) }}"></label>
+<label>{{ __('catalog.promo_end') }}<input type="datetime-local" name="promo_ends_at" value="{{ \App\Support\CatalogPricing::formDate($value('promo_ends_at',$variant->promo_ends_at?->copy()->timezone(\App\Support\CatalogPricing::TIMEZONE)->format('Y-m-d\TH:i'))) }}"></label><small>{{ \App\Support\CatalogPricing::TIMEZONE }}</small>@endif</div>
+<input type="hidden" name="is_default" value="0"><label class="pc-check"><input type="checkbox" name="is_default" value="1" @checked($value('is_default',$variant->is_default))>{{ __('catalog.default') }}</label>

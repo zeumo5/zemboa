@@ -2,19 +2,19 @@
 
 namespace Tests\Feature;
 
-use App\Actions\Pos\CreatePosCashPayment;
 use App\Actions\Payments\ConfirmPayment;
+use App\Actions\Pos\CreatePosCashPayment;
 use App\Actions\Pos\CreatePosOrder;
 use App\Actions\Pos\OpenPosSession;
 use App\Actions\Stock\ReceiveStock;
 use App\Models\Category;
-use App\Models\Permission;
 use App\Models\PosRegister;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Role;
 use App\Models\StockLevel;
 use App\Models\Store;
+use App\Models\StoreSetting;
 use App\Models\User;
 use App\Support\TenantContext;
 use Database\Seeders\PermissionSeeder;
@@ -74,6 +74,7 @@ class CreatePosOrderIntegrationTest extends TestCase
         $cashier->roles()->attach($role->id);
 
         app(TenantContext::class)->setFromStore($store);
+        StoreSetting::create(['pickup_enabled' => true]);
 
         $this->actingAs($cashier);
 
@@ -123,7 +124,7 @@ class CreatePosOrderIntegrationTest extends TestCase
             ->first();
 
         if ($stock === null) {
-            $stock = new StockLevel();
+            $stock = new StockLevel;
             $stock->product_variant_id = $variant->id;
             $stock->physical_quantity = 0;
             $stock->save();

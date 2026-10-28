@@ -2,14 +2,13 @@
 
 namespace Tests\Feature;
 
-
-use Illuminate\Database\QueryException;
-use Illuminate\Support\Facades\DB;
 use App\Models\Role;
 use App\Models\Store;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Tests\TestCase;
@@ -46,6 +45,7 @@ class AdminStoreStatusTest extends TestCase
         $admin = User::factory()->create([
             'store_id' => null,
             'status' => 'ACTIVE',
+            'is_buyer' => false,
         ]);
 
         $role = Role::where('code', 'SUPER_ADMIN')
@@ -61,7 +61,7 @@ class AdminStoreStatusTest extends TestCase
     ): Store {
         return Store::create([
             'name' => 'Boutique Audit ZEMBOA',
-            'slug' => 'audit-' . Str::lower(Str::random(12)),
+            'slug' => 'audit-'.Str::lower(Str::random(12)),
             'status' => $status,
         ]);
     }
@@ -92,19 +92,17 @@ class AdminStoreStatusTest extends TestCase
         ]);
     }
 
-private function patchStatus(
-    Store $store,
-    array $data
-) {
-    return $this->patchJson(
-        $this->statusUrl($store),
-        array_merge([
-            'reason' =>
-                'Décision administrative documentée pour cette boutique.',
-        ], $data)
-    );
-}
-
+    private function patchStatus(
+        Store $store,
+        array $data
+    ) {
+        return $this->patchJson(
+            $this->statusUrl($store),
+            array_merge([
+                'reason' => 'Décision administrative documentée pour cette boutique.',
+            ], $data)
+        );
+    }
 
     public function test_guest_cannot_manage_store(): void
     {
@@ -408,18 +406,19 @@ private function patchStatus(
 
         $this->getJson($url)->assertOk();
     }
-public function test_audit_failure_rolls_back_store_status(): void
-{
-    $store = $this->createStore('PENDING');
-    $this->createOwner($store);
 
-    $admin = $this->createAdmin();
+    public function test_audit_failure_rolls_back_store_status(): void
+    {
+        $store = $this->createStore('PENDING');
+        $this->createOwner($store);
 
-    $this->actingAs($admin);
+        $admin = $this->createAdmin();
 
-    // Simuler une panne d'écriture du journal
-    // uniquement dans la base SQLite de test.
-    DB::unprepared(<<<'SQL'
+        $this->actingAs($admin);
+
+        // Simuler une panne d'écriture du journal
+        // uniquement dans la base SQLite de test.
+        DB::unprepared(<<<'SQL'
         CREATE TRIGGER block_store_status_audit
         BEFORE INSERT ON store_status_events
         BEGIN
@@ -427,36 +426,34 @@ public function test_audit_failure_rolls_back_store_status(): void
         END;
     SQL);
 
-    $this->withoutExceptionHandling();
+        $this->withoutExceptionHandling();
 
-    try {
-        $this->patchStatus($store, [
-            'status' => 'ACTIVE',
-            'reason' => 'Validation administrative de la boutique.',
-        ]);
+        try {
+            $this->patchStatus($store, [
+                'status' => 'ACTIVE',
+                'reason' => 'Validation administrative de la boutique.',
+            ]);
 
-        $this->fail(
-            'Une erreur SQL était attendue.'
+            $this->fail(
+                'Une erreur SQL était attendue.'
+            );
+        } catch (QueryException $exception) {
+            $this->assertStringContainsString(
+                'audit_write_blocked',
+                $exception->getMessage()
+            );
+        }
+
+        // Le changement doit être annulé.
+        $this->assertSame(
+            'PENDING',
+            $store->fresh()->status
         );
-    } catch (QueryException $exception) {
-        $this->assertStringContainsString(
-            'audit_write_blocked',
-            $exception->getMessage()
+
+        // Aucun événement ne doit être enregistré.
+        $this->assertDatabaseCount(
+            'store_status_events',
+            0
         );
     }
-
-    // Le changement doit être annulé.
-    $this->assertSame(
-        'PENDING',
-        $store->fresh()->status
-    );
-
-    // Aucun événement ne doit être enregistré.
-    $this->assertDatabaseCount(
-        'store_status_events',
-        0
-    );
-}
-
-
 }

@@ -1,12 +1,13 @@
 <?php
+
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Category;
 use App\Models\Product;
 use App\Support\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class PublicCatalogController extends Controller
 {
@@ -53,63 +54,60 @@ class PublicCatalogController extends Controller
 
     // Catalogue public paginé.
 
-public function products(
-    Request $request,
-    string $shopSlug
-): JsonResponse {
-    $validated = $request->validate([
-        'search' => [
-            'nullable',
-            'string',
-            'max:100',
-        ],
-        'category' => [
-            'nullable',
-            'string',
-            'max:150',
-        ],
-    ]);
+    public function products(
+        Request $request,
+        string $shopSlug
+    ): JsonResponse {
+        $validated = $request->validate([
+            'search' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
+            'category' => [
+                'nullable',
+                'string',
+                'max:150',
+            ],
+        ]);
 
-    $query = $this->publicProductsQuery();
+        $query = $this->publicProductsQuery();
 
-    // Recherche par nom du produit.
-    if (!empty($validated['search'])) {
-        $search = trim($validated['search']);
+        // Recherche par nom du produit.
+        if (! empty($validated['search'])) {
+            $search = trim($validated['search']);
 
-        $query->where(
-            'name',
-            'like',
-            '%' . $search . '%'
-        );
-    }
+            $query->where(
+                'name',
+                'like',
+                '%'.$search.'%'
+            );
+        }
 
-    // Filtrer par catégorie active.
-    if (!empty($validated['category'])) {
-        $categorySlug = $validated['category'];
+        // Filtrer par catégorie active.
+        if (! empty($validated['category'])) {
+            $categorySlug = $validated['category'];
 
-        $query->whereHas(
-            'category',
-            fn (Builder $category) =>
-                $category->where(
+            $query->whereHas(
+                'category',
+                fn (Builder $category) => $category->where(
                     'slug',
                     $categorySlug
                 )
+            );
+        }
+
+        $products = $query
+            ->orderBy('id')
+            ->paginate(12)
+            ->withQueryString();
+
+        $products->through(
+            fn (Product $product) => $this->formatProduct($product)
         );
+
+        return response()->json($products);
     }
-
-    $products = $query
-        ->orderBy('id')
-        ->paginate(12)
-        ->withQueryString();
-
-    $products->through(
-        fn (Product $product) =>
-            $this->formatProduct($product)
-    );
-
-    return response()->json($products);
-}
-
 
     // Détails d'un seul produit public.
     public function product(string $shopSlug, int $product): JsonResponse
@@ -130,32 +128,34 @@ public function products(
             ->where('status', 'ACTIVE')
             ->whereHas(
                 'category',
-                fn (Builder $query) =>
-                    $query->where('status', 'ACTIVE')
+                fn (Builder $query) => $query->where('status', 'ACTIVE')
             )
             ->whereHas(
                 'variants',
-                fn (Builder $query) =>
-                    $query->where('status', 'ACTIVE')
+                fn (Builder $query) => $query->where('status', 'ACTIVE')
             )
             ->with([
                 'category',
 
-                'images' => fn ($query) =>
-                    $query
-                        ->orderByDesc('is_primary')
-                        ->orderBy('position'),
+                'images' => fn ($query) => $query
+                    ->orderByDesc('is_primary')
+                    ->orderBy('position'),
 
-                'variants' => fn ($query) =>
-                    $query
-                        ->where('status', 'ACTIVE')
-                        ->with('stockLevel'),
+                'variants' => fn ($query) => $query
+                    ->where('status', 'ACTIVE')
+                    ->with('stockLevel'),
             ]);
     }
 
     // Réponse JSON limitée aux données publiques.
     private function formatProduct(Product $product): array
     {
+        $at = request()->attributes->get('zemboa.pricing_at');
+        if (! $at) {
+            $at = now();
+            request()->attributes->set('zemboa.pricing_at', $at);
+        }
+
         return [
             'id' => $product->id,
             'name' => $product->name,
@@ -183,12 +183,9 @@ public function products(
                     'id' => $variant->id,
                     'sku' => $variant->sku,
                     'price' => (string) $variant->price,
-                    'effective_price' =>
-                        (string) $variant->effectivePrice(),
-                    'is_default' =>
-                        (bool) $variant->is_default,
-                    'in_stock' =>
-                        $variant->stockLevel !== null
+                    'effective_price' => (string) $variant->effectivePrice($at),
+                    'is_default' => (bool) $variant->is_default,
+                    'in_stock' => $variant->stockLevel !== null
                         && $variant->stockLevel
                             ->availableQuantity() > 0,
                 ])

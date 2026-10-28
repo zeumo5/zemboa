@@ -1,6 +1,6 @@
 <?php
-namespace Tests\Feature;
 
+namespace Tests\Feature;
 
 use App\Models\Role;
 use App\Models\Store;
@@ -43,6 +43,7 @@ class AdminStoreManagementTest extends TestCase
         $admin = User::factory()->create([
             'store_id' => null,
             'status' => 'ACTIVE',
+            'is_buyer' => false,
         ]);
 
         $role = Role::where('code', 'SUPER_ADMIN')
@@ -57,14 +58,14 @@ class AdminStoreManagementTest extends TestCase
     {
         return [
             'name' => 'Boutique ZEMBOA Test',
-            'slug' => 'boutique-' . Str::lower(Str::random(10)),
+            'slug' => 'boutique-'.Str::lower(Str::random(10)),
             'description' => 'Boutique de test',
             'phone' => '690000000',
             'email' => 'boutique@example.test',
             'address' => 'Douala, Cameroun',
             'owner_name' => 'Propriétaire Test',
-            'owner_email' => 'owner-' . Str::lower(Str::random(10))
-                . '@example.test',
+            'owner_email' => 'owner-'.Str::lower(Str::random(10))
+                .'@example.test',
         ];
     }
 

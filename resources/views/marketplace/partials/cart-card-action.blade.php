@@ -1,4 +1,6 @@
-@if((int) $product->cart_available_count < 1)
+@if(!\App\Support\PublicShopping::allowed())
+  <p class="cart-card-unavailable">{{ __('access.preview') }}</p>
+@elseif((int) $product->cart_available_count < 1)
   <p class="cart-card-unavailable" data-cart-unavailable="{{ $product->id }}">{{ __('cart.unavailable') }}</p>
 @elseif((int) $product->cart_variant_count === 1)
   <form data-cart-form data-cart-direct="{{ $product->id }}" method="post" action="{{ route('public.shops.cart.store', ['shopSlug' => $product->store_slug]) }}" class="cart-card-action">

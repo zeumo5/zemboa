@@ -1,0 +1,6 @@
+@extends('professional.layout')
+@section('title',__('inventory.reservation'))
+@section('content')
+<a class="pc-link" href="{{ route('professional.inventory.reservations') }}">← {{ __('inventory.reservations') }}</a><div class="pc-heading"><div><h1>{{ __('inventory.reservation') }} #{{ $reservation->id }}</h1><p>{{ $store->name }}</p></div>@include('professional.inventory.reservation-status')</div>@include('professional.inventory.nav')
+<section class="pro-panel pc-form"><div class="iv-identity">@include('professional.inventory.variant',['variant'=>$reservation->productVariant])</div><dl class="iv-facts"><div><dt>{{ __('inventory.quantity') }}</dt><dd>{{ $reservation->quantity }}</dd></div><div><dt>{{ __('inventory.reference') }}</dt><dd>{{ $order?->order_number??($reservation->reference_type?($reservation->reference_type.' #'.$reservation->reference_id):'—') }}</dd></div>@foreach(['created_at'=>'created','expires_at'=>'expires','converted_at'=>'converted','released_at'=>'released'] as $field=>$label)<div><dt>{{ __('inventory.'.$label) }}</dt><dd>{{ $reservation->$field?->format('d/m/Y H:i')??'—' }}</dd></div>@endforeach</dl><p class="pc-feedback">{{ __('inventory.read_only') }} {{ __('inventory.due_hint') }}</p></section>
+@endsection

@@ -1,6 +1,6 @@
 <?php
-namespace Tests\Feature;
 
+namespace Tests\Feature;
 
 use App\Actions\Payments\CreateCashPayment;
 use App\Models\Customer;
@@ -75,7 +75,7 @@ class CreateCashPaymentTest extends TestCase
 
         $order = Order::create([
             'customer_id' => $customer->id,
-            'order_number' => 'ZM-CASH-' . $store->id,
+            'order_number' => 'ZM-CASH-'.$store->id,
             'status' => 'PENDING',
             'payment_status' => 'UNPAID',
             'fulfillment_type' => 'PICKUP',
@@ -219,6 +219,7 @@ class CreateCashPaymentTest extends TestCase
     public function test_duplicate_pending_payment_is_rejected(): void
     {
         [$order] = $this->prepareOrder();
+        StoreSetting::create(['allow_partial_payments' => true, 'minimum_deposit_percent' => 0]);
 
         $this->createCash(
             $order,
@@ -282,6 +283,7 @@ class CreateCashPaymentTest extends TestCase
     public function test_insufficient_cash_is_rejected(): void
     {
         [$order] = $this->prepareOrder();
+        StoreSetting::create(['allow_partial_payments' => true, 'minimum_deposit_percent' => 0]);
 
         $this->assertRejected(
             $order,

@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Models\Store;
 use App\Models\Category;
-use App\Models\ProductVariant;
 use App\Models\ProductImage;
+use App\Models\ProductVariant;
+use App\Models\Store;
+use App\Models\StoreSetting;
 use App\Support\TenantContext;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Query\Builder;
@@ -45,11 +46,10 @@ final class MarketplaceController extends Controller
         $products = $this->publicProducts()
             ->when($search !== '', function (Builder $query) use ($search): void {
                 $query->where(function (Builder $filter) use ($search): void {
-                    $filter->where('p.name', 'like', '%' . $search . '%')
-                        ->orWhere('s.name', 'like', '%' . $search . '%');
+                    $filter->where('p.name', 'like', '%'.$search.'%')
+                        ->orWhere('s.name', 'like', '%'.$search.'%');
                 });
             })
-            ->orderByDesc('p.is_featured')
             ->orderByDesc('p.id')
             ->paginate(12)
             ->withQueryString();
@@ -65,11 +65,10 @@ final class MarketplaceController extends Controller
         $products = $this->publicProducts()
             ->when($search !== '', function (Builder $query) use ($search): void {
                 $query->where(function (Builder $filter) use ($search): void {
-                    $filter->where('p.name', 'like', '%' . $search . '%')
-                        ->orWhere('s.name', 'like', '%' . $search . '%');
+                    $filter->where('p.name', 'like', '%'.$search.'%')
+                        ->orWhere('s.name', 'like', '%'.$search.'%');
                 });
             })
-            ->orderByDesc('p.is_featured')
             ->orderByDesc('p.id')
             ->paginate(24)
             ->withQueryString();
@@ -83,7 +82,7 @@ final class MarketplaceController extends Controller
 
         $stores = $this->publicStores()
             ->when($search !== '', function ($query) use ($search): void {
-                $query->where('stores.name', 'like', '%' . $search . '%');
+                $query->where('stores.name', 'like', '%'.$search.'%');
             })
             ->paginate(24)
             ->withQueryString();
@@ -93,10 +92,15 @@ final class MarketplaceController extends Controller
 
     public function shop(Request $request, string $shopSlug): View
     {
+        return $this->renderShop($request, $shopSlug);
+    }
+
+    public function renderShop(Request $request, string $shopSlug, ?string $previewPage = null, ?StoreSetting $previewSettings = null): View
+    {
         $store = app(TenantContext::class)->store();
         abort_unless($store->slug === $shopSlug && $store->status === 'ACTIVE', 404);
-        $settings = $store->settings()->where('store_id', $store->id)->first();
-        $page = match ($request->route()->getName()) {
+        $settings = $previewSettings ?? $store->settings()->where('store_id', $store->id)->first();
+        $page = $previewPage ?? match ($request->route()->getName()) {
             'marketplace.shops.products' => 'catalog',
             'marketplace.shops.categories' => 'categories',
             'marketplace.shops.about' => 'about',
@@ -160,7 +164,7 @@ final class MarketplaceController extends Controller
         abort_unless($store->slug === $shopSlug && $store->status === 'ACTIVE', 404);
         $settings = $store->settings()->where('store_id', $store->id)->first();
         $saved = session('zemboa.cart', []);
-        $hasForeignCart = !empty($saved['items']) && (int) ($saved['store_id'] ?? 0) !== $store->id;
+        $hasForeignCart = ! empty($saved['items']) && (int) ($saved['store_id'] ?? 0) !== $store->id;
         $otherStore = $hasForeignCart
             ? Store::query()->where('status', 'ACTIVE')->find((int) ($saved['store_id'] ?? 0)) : null;
 
@@ -185,13 +189,15 @@ final class MarketplaceController extends Controller
      */
     private function publicProducts(?int $storeId = null): Builder
     {
+        $at = request()->attributes->get('zemboa.pricing_at') ?? now();
+        request()->attributes->set('zemboa.pricing_at', $at);
         $priceQuery = DB::table('product_variants as price_variant')
             ->selectRaw(
                 'CASE WHEN price_variant.promo_price IS NOT NULL '
-                . 'AND (price_variant.promo_starts_at IS NULL OR price_variant.promo_starts_at <= ?) '
-                . 'AND (price_variant.promo_ends_at IS NULL OR price_variant.promo_ends_at >= ?) '
-                . 'THEN price_variant.promo_price ELSE price_variant.price END',
-                [now(), now()]
+                .'AND (price_variant.promo_starts_at IS NULL OR price_variant.promo_starts_at <= ?) '
+                .'AND (price_variant.promo_ends_at IS NULL OR price_variant.promo_ends_at >= ?) '
+                .'THEN price_variant.promo_price ELSE price_variant.price END',
+                [$at, $at]
             )
             ->whereColumn('price_variant.product_id', 'p.id')
             ->whereColumn('price_variant.store_id', 'p.store_id')
@@ -251,6 +257,7 @@ final class MarketplaceController extends Controller
                 'c.name as category_name',
             ])
             ->selectSub($priceQuery, 'display_price')
+            ->selectSub((clone $priceQuery)->select('price_variant.price'), 'display_base_price')
             ->selectSub($imageQuery, 'image_path');
 
         if ($storeId !== null) {

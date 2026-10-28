@@ -23,7 +23,7 @@ class StockAdjustmentRequest extends FormRequest
             'reason' => [
                 'nullable',
                 'string',
-                'max:500',
+                'max:255',
             ],
         ];
     }

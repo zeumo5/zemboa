@@ -608,3 +608,18 @@ Lorsqu'une décision architecturale importante change :
 3. indiquer la nouvelle décision ;
 4. documenter l'impact ;
 5. ajouter ou adapter les tests concernés.
+## Décision complémentaire — Phase 20C-2E (2026-10-25)
+
+**ACCEPTED / IMPLEMENTED :** prix, promotions de variantes et mise en avant marchande
+réservés à STORE_OWNER avec permission catalogue et tenant valides. STORE_MANAGER
+consulte les promotions et modifie les autres informations autorisées ; créer un
+produit/variante exigeant un prix initial reste réservé au propriétaire. Les permissions
+catalogue générales ne délèguent pas le pouvoir tarifaire. CASHIER consomme les prix
+automatiques ; DELIVERY_AGENT et SUPER_ADMIN n'ont aucun pouvoir promotionnel implicite.
+La mise en avant marchande ne donne aucune priorité globale sur la marketplace.
+
+Le checkout fait reconfirmer tout nouveau prix/frais avant création. Il réutilise le
+calculateur et l'idempotence existants, conserve l'historique, refuse le total nul
+et ne réduit pas les frais de livraison par une promotion produit. Formulaires en
+Africa/Douala, stockage UTC, bornes inclusives. Voir la section 20C-2E de
+`docs/MERCHANT_CATALOG_PHASE20C2A.md` pour le contrat JSON et ses limites.

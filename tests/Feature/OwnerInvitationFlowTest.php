@@ -1,6 +1,6 @@
 <?php
-namespace Tests\Feature;
 
+namespace Tests\Feature;
 
 use App\Models\Role;
 use App\Models\Store;
@@ -50,6 +50,7 @@ class OwnerInvitationFlowTest extends TestCase
         $admin = User::factory()->create([
             'store_id' => null,
             'status' => 'ACTIVE',
+            'is_buyer' => false,
         ]);
 
         $adminRole = Role::query()
@@ -60,9 +61,9 @@ class OwnerInvitationFlowTest extends TestCase
 
         $this->actingAs($admin);
 
-        $slug = 'store-' . Str::lower(Str::random(10));
-        $email = 'owner-' . Str::lower(Str::random(10))
-            . '@example.test';
+        $slug = 'store-'.Str::lower(Str::random(10));
+        $email = 'owner-'.Str::lower(Str::random(10))
+            .'@example.test';
 
         $this->postJson(route('admin.stores.store'), [
             'name' => 'Boutique ZEMBOA Audit',

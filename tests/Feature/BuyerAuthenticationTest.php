@@ -6,12 +6,16 @@ use App\Models\Customer;
 use App\Models\Role;
 use App\Models\Store;
 use App\Models\User;
+use App\Providers\AppServiceProvider;
 use App\Support\TenantContext;
+use Illuminate\Cache\RateLimiter;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -292,9 +296,9 @@ class BuyerAuthenticationTest extends TestCase
             for ($attempt = 0; $attempt < 6; $attempt++) {
                 $this->app->forgetInstance('cache');
                 $this->app->forgetInstance('cache.store');
-                $this->app->forgetInstance(\Illuminate\Cache\RateLimiter::class);
-                \Illuminate\Support\Facades\RateLimiter::clearResolvedInstance(\Illuminate\Cache\RateLimiter::class);
-                $this->app->getProvider(\App\Providers\AppServiceProvider::class)->boot();
+                $this->app->forgetInstance(RateLimiter::class);
+                \Illuminate\Support\Facades\RateLimiter::clearResolvedInstance(RateLimiter::class);
+                $this->app->getProvider(AppServiceProvider::class)->boot();
                 $response = $this->postJson(route('buyer.login.store'), [
                     'email' => 'limiter-test@example.test', 'password' => 'incorrect',
                 ]);
@@ -351,10 +355,13 @@ class BuyerAuthenticationTest extends TestCase
         $user = User::sole();
         $this->assertSame('+237690000001', $user->phone);
         $this->assertSame('+237690000001', $user->buyer_phone_identity);
-        $this->assertNull($user->email); $this->assertNull($user->email_verified_at);
-        $this->assertNull($user->store_id); $this->assertCount(0, $user->roles);
+        $this->assertNull($user->email);
+        $this->assertNull($user->email_verified_at);
+        $this->assertNull($user->store_id);
+        $this->assertCount(0, $user->roles);
         $this->assertArrayNotHasKey('buyer_phone_identity', $user->toArray());
-        $this->get(route('buyer.account'))->assertOk()->assertSee('+237690000001');
+        $this->get(route('buyer.account'))->assertOk();
+        $this->get(route('buyer.profile'))->assertOk()->assertSee('+237690000001');
         $this->assertDatabaseCount('customers', 0);
     }
 
@@ -376,7 +383,8 @@ class BuyerAuthenticationTest extends TestCase
             $this->postJson(route('buyer.register.store'), $this->registration(['phone' => $phone]))
                 ->assertUnprocessable()->assertJsonValidationErrors('phone');
         }
-        $data = $this->registration(); unset($data['password_confirmation']);
+        $data = $this->registration();
+        unset($data['password_confirmation']);
         $this->postJson(route('buyer.register.store'), $data)->assertUnprocessable()->assertJsonValidationErrors('password');
         $this->assertDatabaseCount('users', 0);
     }
@@ -387,7 +395,8 @@ class BuyerAuthenticationTest extends TestCase
         $this->withSession(['zemboa.cart' => ['store_id' => 5, 'items' => [12 => 3]]]);
         foreach (['690000001', '237690000001', '+237 690-000-001'] as $phone) {
             $this->post(route('buyer.login.store'), ['identifier' => $phone, 'password' => self::PASSWORD])->assertRedirect(route('buyer.account'));
-            $this->assertAuthenticatedAs($user, 'buyer'); $this->assertGuest('web');
+            $this->assertAuthenticatedAs($user, 'buyer');
+            $this->assertGuest('web');
             $this->assertSame(3, session('zemboa.cart.items.12'));
             Auth::guard('buyer')->logoutCurrentDevice();
         }
@@ -406,22 +415,26 @@ class BuyerAuthenticationTest extends TestCase
     {
         $user = $this->professional();
         $other = User::factory()->create(['store_id' => $user->store_id, 'phone' => '+237690000099', 'is_buyer' => false]);
-        $before = $user->fresh()->getRawOriginal(); $otherBefore = $other->fresh()->getRawOriginal();
+        $before = $user->fresh()->getRawOriginal();
+        $otherBefore = $other->fresh()->getRawOriginal();
         $this->postJson(route('buyer.register.store'), $this->registration(['phone' => '237690000099']))->assertUnprocessable()->assertJsonValidationErrors('phone');
         $this->postJson(route('buyer.login.store'), ['identifier' => '690000099', 'password' => self::PASSWORD, 'enable_buyer' => true])
             ->assertUnprocessable()->assertJsonValidationErrors('identifier');
         $this->postJson(route('buyer.login.store'), ['identifier' => $user->email, 'password' => self::PASSWORD, 'enable_buyer' => true])->assertUnprocessable();
         $this->assertSame($before, $user->fresh()->getRawOriginal());
-        $this->assertSame($otherBefore, $other->fresh()->getRawOriginal()); $this->assertGuest('buyer');
+        $this->assertSame($otherBefore, $other->fresh()->getRawOriginal());
+        $this->assertGuest('buyer');
     }
 
     public function test_professional_without_phone_cannot_enable_buyer_but_can_still_log_in_professionally(): void
     {
-        $user = $this->professional(); $user->forceFill(['phone' => null])->save();
+        $user = $this->professional();
+        $user->forceFill(['phone' => null])->save();
         $this->postJson(route('buyer.login.store'), ['identifier' => $user->email, 'password' => self::PASSWORD, 'enable_buyer' => true])->assertUnprocessable();
         $this->assertFalse($user->fresh()->is_buyer);
         $this->postJson(route('login.store'), ['email' => $user->email, 'password' => self::PASSWORD])->assertOk();
-        $this->assertAuthenticatedAs($user, 'web'); $this->assertGuest('buyer');
+        $this->assertAuthenticatedAs($user, 'web');
+        $this->assertGuest('buyer');
     }
 
     public function test_database_unique_identity_cannot_be_bypassed_by_phone_format_or_opt_in(): void
@@ -430,8 +443,11 @@ class BuyerAuthenticationTest extends TestCase
         try {
             $this->buyer(['phone' => '237690000001']);
             $this->fail('Expected the database unique constraint, independently from request validation.');
-        } catch (\Illuminate\Database\UniqueConstraintViolationException) { $this->assertDatabaseCount('users', 1); }
-        $professional = $this->professional(); $professional->forceFill(['phone' => '690000001'])->save();
+        } catch (UniqueConstraintViolationException) {
+            $this->assertDatabaseCount('users', 1);
+        }
+        $professional = $this->professional();
+        $professional->forceFill(['phone' => '690000001'])->save();
         $this->postJson(route('buyer.login.store'), ['identifier' => $professional->email, 'password' => self::PASSWORD, 'enable_buyer' => true])->assertUnprocessable();
         $this->assertFalse($professional->fresh()->is_buyer);
     }
@@ -452,18 +468,23 @@ class BuyerAuthenticationTest extends TestCase
         foreach (['690000001', '237690000001', '+237 690-000-001', '(690)000.001', "+237\t690\r\n000001"] as $phone) {
             $user->forceFill(['phone' => $phone])->save();
             $this->assertSame('+237690000001', $user->fresh()->buyer_phone_identity);
-            try { $this->buyer(['phone' => '690000001']); $this->fail('Unique index must protect every representation.'); }
-            catch (\Illuminate\Database\UniqueConstraintViolationException) { $this->assertDatabaseCount('users', 1); }
+            try {
+                $this->buyer(['phone' => '690000001']);
+                $this->fail('Unique index must protect every representation.');
+            } catch (UniqueConstraintViolationException) {
+                $this->assertDatabaseCount('users', 1);
+            }
         }
     }
 
     public function test_registration_and_opt_in_fail_closed_without_the_unique_identity_index(): void
     {
         $user = $this->professional();
-        \Illuminate\Support\Facades\Schema::table('users', fn ($table) => $table->dropUnique('users_buyer_phone_identity_unique'));
+        Schema::table('users', fn ($table) => $table->dropUnique('users_buyer_phone_identity_unique'));
         $this->postJson(route('buyer.register.store'), $this->registration(['email' => null]))->assertStatus(503);
         $this->postJson(route('buyer.login.store'), ['identifier' => $user->email, 'password' => self::PASSWORD, 'enable_buyer' => true])->assertStatus(503);
-        $this->assertDatabaseCount('users', 1); $this->assertFalse($user->fresh()->is_buyer);
+        $this->assertDatabaseCount('users', 1);
+        $this->assertFalse($user->fresh()->is_buyer);
     }
 
     public function test_case_ambiguous_legacy_email_never_selects_an_arbitrary_user(): void

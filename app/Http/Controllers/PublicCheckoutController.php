@@ -11,6 +11,7 @@ use App\Support\TenantContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class PublicCheckoutController extends Controller
 {
@@ -21,19 +22,27 @@ class PublicCheckoutController extends Controller
         $this->checkout->ready();
         $store = app(TenantContext::class)->store();
         $settings = StoreSetting::first();
-        $summary = $this->cart->summary();
         $zones = DeliveryZone::where('status', 'ACTIVE')->orderBy('name')->get();
         $choice = $request->validate(['fulfillment_type' => ['nullable', Rule::in(['PICKUP', 'DELIVERY'])], 'delivery_zone_id' => ['nullable', 'integer', 'min:1']]);
         $fulfillment = $choice['fulfillment_type'] ?? ($settings?->pickup_enabled ? 'PICKUP' : 'DELIVERY');
         $zone = isset($choice['delivery_zone_id']) ? $zones->firstWhere('id', (int) $choice['delivery_zone_id']) : $zones->first();
-        abort_if(isset($choice['delivery_zone_id']) && !$zone, 422, __('checkout.no_service'));
-        $fee = $fulfillment === 'DELIVERY' && $settings?->delivery_enabled ? ($zone?->fee ?? '0.00') : '0.00';
-        $total = app(\App\Actions\Orders\OrderPriceCalculator::class)->calculate(array_map(fn ($line) => [
-            'quantity' => $line['quantity'], 'unit_price' => $line['unit_price'] ?? '0.00',
-            'final_unit_price' => $line['final_unit_price'] ?? '0.00'], $summary['details']), $fee);
+        abort_if(isset($choice['delivery_zone_id']) && ! $zone, 422, __('checkout.no_service'));
+        try {
+            $quote = $this->checkout->quote($fulfillment, $fulfillment === 'DELIVERY' ? $zone?->id : null);
+        } catch (ValidationException $exception) {
+            if ($request->expectsJson()) {
+                throw $exception;
+            }
+            abort(422, $exception->validator->errors()->first());
+        }
+        $summary = $quote['summary'];
+        $total = $quote['total'];
         $buyer = Auth::guard('buyer')->user();
-        $token = $this->checkout->token();
-        if ($request->expectsJson()) return response()->json(['data' => compact('summary', 'token', 'zones', 'fulfillment', 'zone', 'total')])->header('Cache-Control', 'private, no-store');
+        $token = $this->checkout->token($quote);
+        if ($request->expectsJson()) {
+            return response()->json(['data' => compact('summary', 'token', 'zones', 'fulfillment', 'zone', 'total')])->header('Cache-Control', 'private, no-store');
+        }
+
         return response()->view('marketplace.merchant.checkout', compact('store', 'settings', 'summary', 'zones', 'buyer', 'token', 'fulfillment', 'zone', 'total'))
             ->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
     }
@@ -44,19 +53,21 @@ class PublicCheckoutController extends Controller
         $data = $request->validate([
             'customer_name' => ['required', 'string', 'max:150'],
             'customer_phone' => ['bail', 'required', 'string', 'max:64', function ($attribute, $value, $fail) {
-                if (!BuyerIdentity::phoneOrNull($value)) $fail(__('buyer.phone_invalid'));
+                if (! BuyerIdentity::phoneOrNull($value)) {
+                    $fail(__('buyer.phone_invalid'));
+                }
             }],
             'customer_email' => ['nullable', 'email', 'max:150'],
             'fulfillment_type' => ['required', Rule::in(['PICKUP', 'DELIVERY'])],
-            'delivery_zone_id' => ['nullable', 'integer', 'min:1'],
+            'delivery_zone_id' => ['required_if:fulfillment_type,DELIVERY', 'nullable', 'integer', 'min:1'],
             'delivery_address' => ['nullable', 'string', 'max:500'],
             'delivery_area' => ['nullable', 'string', 'max:150'],
             'delivery_instructions' => ['nullable', 'string', 'max:1000'],
             'checkout_token' => ['nullable', 'string', 'max:2048'],
-        ]);
-        if (!$request->expectsJson()) {
+        ], ['delivery_zone_id.required_if' => __('orders.delivery_zone_required')]);
+        if (! $request->expectsJson()) {
             $settings = StoreSetting::first();
-            abort_unless($settings && ($data['fulfillment_type'] === 'PICKUP' ? $settings->pickup_enabled : $settings->delivery_enabled), 422, __('checkout.no_service'));
+            abort_unless($settings && $settings->hasCommercialConfiguration() && ($data['fulfillment_type'] === 'PICKUP' ? $settings->pickup_enabled : $settings->delivery_enabled), 422, __('checkout.no_service'));
             $request->validate(['checkout_token' => ['required', 'string', 'max:2048']]);
         }
         $token = $data['checkout_token'] ?? null;
@@ -67,10 +78,32 @@ class PublicCheckoutController extends Controller
         foreach (['delivery_zone_id', 'delivery_address', 'delivery_area', 'delivery_instructions'] as $field) {
             $normalized[$field] = $data['fulfillment_type'] === 'DELIVERY' ? ($data[$field] ?? null) : null;
         }
-        if ($normalized['delivery_zone_id'] !== null) $normalized['delivery_zone_id'] = (int) $normalized['delivery_zone_id'];
-        $order = $this->checkout->submit($normalized, $token);
+        if ($normalized['delivery_zone_id'] !== null) {
+            $normalized['delivery_zone_id'] = (int) $normalized['delivery_zone_id'];
+        }
+        try {
+            $order = $this->checkout->submit($normalized, $token);
+        } catch (ValidationException $exception) {
+            if (! isset($exception->errors()['checkout_token'])) {
+                throw $exception;
+            }
+            $quote = $this->checkout->quote($normalized['fulfillment_type'], $normalized['delivery_zone_id']);
+            $reviewToken = $this->checkout->token($quote);
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $exception->errors()['checkout_token'][0],
+                    'data' => ['summary' => $quote['summary'], 'total' => $quote['total'], 'token' => $reviewToken,
+                        'requires_confirmation' => true]], 409)->header('Cache-Control', 'private, no-store');
+            }
+
+            return redirect()->route('marketplace.shops.checkout', ['shopSlug' => $shopSlug,
+                'fulfillment_type' => $normalized['fulfillment_type'], 'delivery_zone_id' => $normalized['delivery_zone_id']])
+                ->withInput($request->except(['checkout_token', '_token']))->withErrors($exception->errors());
+        }
         $url = route('marketplace.shops.checkout.receipt', ['shopSlug' => $shopSlug, 'orderId' => $order->id]);
-        if (!$request->expectsJson()) return redirect($url, 303);
+        if (! $request->expectsJson()) {
+            return redirect($url, 303);
+        }
+
         return response()->json(['message' => __('orders.created_successfully'), 'data' => [
             'order_id' => $order->id, 'order_number' => $order->order_number,
             'status' => $order->status, 'payment_status' => $order->payment_status,
@@ -84,6 +117,7 @@ class PublicCheckoutController extends Controller
         $order = $this->checkout->receipt($orderId);
         $store = app(TenantContext::class)->store();
         $settings = StoreSetting::first();
+
         return response()->view('marketplace.merchant.checkout-receipt', compact('order', 'store', 'settings'))
             ->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
     }

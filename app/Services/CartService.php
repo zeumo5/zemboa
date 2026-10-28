@@ -1,9 +1,15 @@
 <?php
+
 namespace App\Services;
 
 use App\Actions\Orders\OrderPriceCalculator;
 use App\Models\ProductVariant;
+use App\Models\Store;
+use App\Support\PublicShopping;
 use App\Support\TenantContext;
+use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 final class CartService
@@ -11,15 +17,15 @@ final class CartService
     private const SESSION_KEY = 'zemboa.cart';
 
     public function __construct(
-    private readonly OrderPriceCalculator $priceCalculator
-) {}
+        private readonly OrderPriceCalculator $priceCalculator
+    ) {}
 
     public function items(): array
     {
         $cart = session()->get(self::SESSION_KEY, []);
 
         if (
-            !is_array($cart) ||
+            ! is_array($cart) ||
             (int) ($cart['store_id'] ?? 0) !== $this->storeId()
         ) {
             return [];
@@ -28,103 +34,107 @@ final class CartService
         return $cart['items'] ?? [];
     }
 
-public function summary(): array
-{
-    $items = $this->items();
+    public function summary(?CarbonInterface $at = null): array
+    {
+        $items = $this->items();
 
-    $details = [];
-    $pricingItems = [];
-    $canCheckout = $items !== [];
+        $at ??= now();
+        $details = [];
+        $pricingItems = [];
+        $canCheckout = $items !== [];
 
-    foreach ($items as $variantId => $quantity) {
-        $quantity = (int) $quantity;
+        foreach ($items as $variantId => $quantity) {
+            $quantity = (int) $quantity;
 
-        // Recherche limitée à la boutique courante.
-        $variant = ProductVariant::query()
-            ->with(['product.category', 'product.images' => fn ($query) => $query->orderByDesc('is_primary')->orderBy('position')->orderBy('id'), 'attributeValues.attribute', 'stockLevel'])
-            ->find((int) $variantId);
+            // Recherche limitée à la boutique courante.
+            $variant = ProductVariant::query()
+                ->with(['product.category', 'product.images' => fn ($query) => $query->orderByDesc('is_primary')->orderBy('position')->orderBy('id'), 'attributeValues.attribute', 'stockLevel'])
+                ->find((int) $variantId);
 
-        // Un article retiré du catalogue reste visible
-        // comme indisponible dans le panier.
-        if (
-            $variant === null ||
-            $variant->status !== 'ACTIVE' ||
-            $variant->product === null ||
-            $variant->product->status !== 'ACTIVE' ||
-            $variant->product->category === null ||
-            $variant->product->category->status !== 'ACTIVE' ||
-            $quantity <= 0
-        ) {
+            // Un article retiré du catalogue reste visible
+            // comme indisponible dans le panier.
+            if (
+                $variant === null ||
+                $variant->status !== 'ACTIVE' ||
+                $variant->product === null ||
+                $variant->product->status !== 'ACTIVE' ||
+                $variant->product->category === null ||
+                $variant->product->category->status !== 'ACTIVE' ||
+                $quantity <= 0
+            ) {
+                $details[] = [
+                    'product_variant_id' => (int) $variantId,
+                    'product_id' => $variant?->product?->id,
+                    'quantity' => $quantity,
+                    'available' => false,
+                    'message' => 'Article indisponible.',
+                ];
+
+                $canCheckout = false;
+
+                continue;
+            }
+
+            $unitPrice = (string) $variant->price;
+            $finalPrice = (string) $variant->effectivePrice($at);
+
+            $unitFcfa = $this->priceCalculator->toFcfa($unitPrice);
+            $finalFcfa = $this->priceCalculator->toFcfa($finalPrice);
+
+            $availableStock = $variant->stockLevel?->availableQuantity() ?? 0;
+            $available = $availableStock >= $quantity;
+
+            if (! $available) {
+                $canCheckout = false;
+            }
+
             $details[] = [
-                'product_variant_id' => (int) $variantId,
-                'product_id' => $variant?->product?->id,
+                'product_variant_id' => $variant->id,
+                'product_id' => $variant->product->id,
+                'product_name' => $variant->product->name,
+                'sku' => $variant->sku,
+                'variant_label' => $variant->attributeValues->filter(fn ($value) => $value->attribute !== null)
+                    ->map(fn ($value) => $value->attribute->name.': '.$value->value)->implode(' / '),
+                'image_url' => ($image = $variant->product->images->first())
+                    ? Storage::disk('public')->url($image->path) : null,
+                'product_url' => route('marketplace.products.show', ['shopSlug' => app(TenantContext::class)->store()->slug, 'product' => $variant->product->id]),
                 'quantity' => $quantity,
-                'available' => false,
-                'message' => 'Article indisponible.',
+                'unit_price' => $unitFcfa.'.00',
+                'final_unit_price' => $finalFcfa.'.00',
+                'line_total' => ($finalFcfa * $quantity).'.00',
+                'available' => $available,
             ];
 
-            $canCheckout = false;
-            continue;
+            $pricingItems[] = [
+                'quantity' => $quantity,
+                'unit_price' => $unitPrice,
+                'final_unit_price' => $finalPrice,
+            ];
         }
 
-        $unitPrice = (string) $variant->price;
-        $finalPrice = (string) $variant->effectivePrice();
+        $totals = $this->priceCalculator->calculate(
+            items: $pricingItems
+        );
 
-        $unitFcfa = $this->priceCalculator->toFcfa($unitPrice);
-        $finalFcfa = $this->priceCalculator->toFcfa($finalPrice);
-
-        $availableStock = $variant->stockLevel?->availableQuantity() ?? 0;
-        $available = $availableStock >= $quantity;
-
-        if (! $available) {
-            $canCheckout = false;
-        }
-
-        $details[] = [
-            'product_variant_id' => $variant->id,
-            'product_id' => $variant->product->id,
-            'product_name' => $variant->product->name,
-            'sku' => $variant->sku,
-            'variant_label' => $variant->attributeValues->filter(fn ($value) => $value->attribute !== null)
-                ->map(fn ($value) => $value->attribute->name.': '.$value->value)->implode(' / '),
-            'image_url' => ($image = $variant->product->images->first())
-                ? \Illuminate\Support\Facades\Storage::disk('public')->url($image->path) : null,
-            'product_url' => route('marketplace.products.show', ['shopSlug' => app(TenantContext::class)->store()->slug, 'product' => $variant->product->id]),
-            'quantity' => $quantity,
-            'unit_price' => $unitFcfa . '.00',
-            'final_unit_price' => $finalFcfa . '.00',
-            'line_total' => ($finalFcfa * $quantity) . '.00',
-            'available' => $available,
-        ];
-
-        $pricingItems[] = [
-            'quantity' => $quantity,
-            'unit_price' => $unitPrice,
-            'final_unit_price' => $finalPrice,
+        return [
+            'details' => $details,
+            'totals' => $totals,
+            'can_checkout' => $canCheckout,
+            'counts' => self::countDetails($details),
+            'products_subtotal' => $totals['total'],
         ];
     }
-
-    $totals = $this->priceCalculator->calculate(
-        items: $pricingItems
-    );
-
-    return [
-        'details' => $details,
-        'totals' => $totals,
-        'can_checkout' => $canCheckout,
-        'counts' => self::countDetails($details),
-        'products_subtotal' => $totals['total'],
-    ];
-}
 
     /** Read-only badge projection, also usable outside a tenant route. */
     public static function sessionCounts(): array
     {
         $cart = session(self::SESSION_KEY, []);
         $items = $cart['items'] ?? [];
-        if (!$items) return self::countDetails([]);
+        if (! $items) {
+            return self::countDetails([]);
+        }
         // Never remove tenant filtering implicitly: both sides are explicitly scoped.
-        $products = \Illuminate\Support\Facades\DB::table('product_variants as v')
+        $products = DB::table('product_variants as v')
             ->join('products as p', 'p.id', '=', 'v.product_id')
             ->where('v.store_id', (int) ($cart['store_id'] ?? 0))
             ->where('p.store_id', (int) ($cart['store_id'] ?? 0))
@@ -134,6 +144,7 @@ public function summary(): array
         foreach ($items as $id => $quantity) {
             $details[] = ['product_id' => $products[$id] ?? null, 'quantity' => $quantity];
         }
+
         return self::countDetails($details);
     }
 
@@ -148,6 +159,7 @@ public function summary(): array
 
     public function add(int $variantId, int $quantity): array
     {
+        PublicShopping::assertAllowed();
         $this->validateQuantity($quantity);
 
         $items = $this->editableItems();
@@ -167,14 +179,14 @@ public function summary(): array
 
     public function update(int $variantId, int $quantity): array
     {
+        PublicShopping::assertAllowed();
         $this->validateQuantity($quantity);
 
         $items = $this->editableItems();
 
-        if (!array_key_exists($variantId, $items)) {
+        if (! array_key_exists($variantId, $items)) {
             throw ValidationException::withMessages([
-                'product_variant_id' =>
-                    'Cet article ne figure pas dans le panier.',
+                'product_variant_id' => 'Cet article ne figure pas dans le panier.',
             ]);
         }
 
@@ -191,6 +203,7 @@ public function summary(): array
 
     public function remove(int $variantId): array
     {
+        PublicShopping::assertAllowed();
         $items = $this->editableItems();
 
         unset($items[$variantId]);
@@ -200,19 +213,22 @@ public function summary(): array
         return $items;
     }
 
-   public function clear(): void
-{
-    $this->editableItems();
-    session()->forget(self::SESSION_KEY);
-}
-
+    public function clear(): void
+    {
+        PublicShopping::assertAllowed();
+        $this->editableItems();
+        session()->forget(self::SESSION_KEY);
+    }
 
     /** Public owner metadata and an opaque, session/state/target-bound confirmation. */
     public function foreignCart(): ?array
     {
         $cart = session(self::SESSION_KEY, []);
-        if (empty($cart['items']) || (int) ($cart['store_id'] ?? 0) === $this->storeId()) return null;
-        $owner = \App\Models\Store::query()->where('status', 'ACTIVE')->find((int) ($cart['store_id'] ?? 0));
+        if (empty($cart['items']) || (int) ($cart['store_id'] ?? 0) === $this->storeId()) {
+            return null;
+        }
+        $owner = Store::query()->where('status', 'ACTIVE')->find((int) ($cart['store_id'] ?? 0));
+
         return [
             'cart_url' => $owner ? route('marketplace.shops.cart', ['shopSlug' => $owner->slug]) : null,
             'confirmation_token' => $owner ? $this->switchToken($cart) : null,
@@ -222,9 +238,10 @@ public function summary(): array
 
     public function switchStore(string $confirmationToken): void
     {
+        PublicShopping::assertAllowed();
         $cart = session(self::SESSION_KEY, []);
         $foreign = $this->foreignCart();
-        if (!$foreign || !$foreign['confirmation_token'] || !hash_equals($foreign['confirmation_token'], $confirmationToken)) {
+        if (! $foreign || ! $foreign['confirmation_token'] || ! hash_equals($foreign['confirmation_token'], $confirmationToken)) {
             throw ValidationException::withMessages(['confirmation_token' => 'Cart confirmation is obsolete or unavailable.']);
         }
         // Deliberately separate from clear(): explicit abandonment of this session only.
@@ -234,6 +251,7 @@ public function summary(): array
     private function switchToken(array $cart): string
     {
         abort_unless(is_string(config('app.key')) && strlen(config('app.key')) >= 32, 503);
+
         return hash_hmac('sha256', session()->getId().'|'.$this->storeId().'|'.serialize($cart), (string) config('app.key'));
     }
 
@@ -242,12 +260,11 @@ public function summary(): array
         $cart = session()->get(self::SESSION_KEY, []);
 
         if (
-            !empty($cart['items']) &&
+            ! empty($cart['items']) &&
             (int) ($cart['store_id'] ?? 0) !== $this->storeId()
         ) {
             throw ValidationException::withMessages([
-                'cart' =>
-                    'Le panier appartient à une autre boutique. Videz-le avant de changer de boutique.',
+                'cart' => 'Le panier appartient à une autre boutique. Videz-le avant de changer de boutique.',
             ]);
         }
 
@@ -278,8 +295,7 @@ public function summary(): array
 
         if ($quantity > $available) {
             throw ValidationException::withMessages([
-                'quantity' =>
-                    'Quantité supérieure au stock disponible.',
+                'quantity' => 'Quantité supérieure au stock disponible.',
             ]);
         }
     }
@@ -288,8 +304,7 @@ public function summary(): array
     {
         if ($quantity <= 0) {
             throw ValidationException::withMessages([
-                'quantity' =>
-                    'La quantité doit être supérieure à zéro.',
+                'quantity' => 'La quantité doit être supérieure à zéro.',
             ]);
         }
     }
@@ -298,6 +313,7 @@ public function summary(): array
     {
         if ($items === []) {
             session()->forget(self::SESSION_KEY);
+
             return;
         }
 

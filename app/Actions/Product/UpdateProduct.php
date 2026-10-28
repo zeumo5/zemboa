@@ -25,7 +25,7 @@ class UpdateProduct
             'slug' => $data['slug'],
             'description' => $data['description'] ?? null,
             'status' => $data['status'],
-            'is_featured' => $data['is_featured'] ?? false,
+            'is_featured' => $data['is_featured'] ?? $product->is_featured,
         ]);
 
         return $product->refresh();

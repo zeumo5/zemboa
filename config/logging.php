@@ -1,11 +1,12 @@
 <?php
 
+use App\Logging\RedactInvitationSecrets;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 use Monolog\Processor\PsrLogMessageProcessor;
 
-return [
+$configuration = [
 
     /*
     |--------------------------------------------------------------------------
@@ -138,3 +139,10 @@ return [
     ],
 
 ];
+
+foreach ($configuration['channels'] as &$channel) {
+    $channel['tap'][] = RedactInvitationSecrets::class;
+}
+unset($channel);
+
+return $configuration;

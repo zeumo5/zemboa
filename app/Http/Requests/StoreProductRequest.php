@@ -2,10 +2,11 @@
 
 namespace App\Http\Requests;
 
+use App\Support\CatalogPricing;
 use App\Support\TenantContext;
-use Illuminate\Validation\Rule;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreProductRequest extends FormRequest
 {
@@ -14,7 +15,7 @@ class StoreProductRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true;
+        return CatalogPricing::writable($this->user('web'));
     }
 
     /**
@@ -23,65 +24,64 @@ class StoreProductRequest extends FormRequest
      * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
-{
-    return [
-        'category_id' => [
-            'required',
-            'integer',
-        ],
+    {
+        return [
+            'category_id' => [
+                'required',
+                'integer',
+            ],
 
-        'name' => [
-            'required',
-            'string',
-            'max:180',
-        ],
+            'name' => [
+                'required',
+                'string',
+                'max:180',
+            ],
 
-        'slug' => [
-    'required',
-    'string',
-    'max:200',
-    Rule::unique('products', 'slug')
-        ->where(
-            fn ($query) => $query->where(
-                'store_id',
-                app(TenantContext::class)->storeId()
-            )
-        ),
-],
+            'slug' => [
+                'required',
+                'string',
+                'max:200',
+                Rule::unique('products', 'slug')
+                    ->where(
+                        fn ($query) => $query->where(
+                            'store_id',
+                            app(TenantContext::class)->storeId()
+                        )
+                    ),
+            ],
 
-        'description' => [
-            'nullable',
-            'string',
-        ],
+            'description' => [
+                'nullable',
+                'string',
+            ],
 
-        'status' => [
-            'required',
-            'string',
-            'in:ACTIVE,INACTIVE',
-        ],
+            'status' => [
+                'required',
+                'string',
+                'in:ACTIVE,INACTIVE',
+            ],
 
-        'is_featured' => [
-            'sometimes',
-            'boolean',
-        ],
+            'is_featured' => [
+                'sometimes',
+                'boolean',
+            ],
 
-        'default_variant' => [
-            'required',
-            'array',
-        ],
+            'default_variant' => [
+                'required',
+                'array',
+            ],
 
-        'default_variant.price' => [
-            'required',
-            'numeric',
-            'min:0',
-        ],
+            'default_variant.price' => [
+                'required',
+                'numeric',
+                'min:0',
+            ],
 
-        'default_variant.sku' => [
-            'nullable',
-            'string',
-            'max:100',
-        ],
-    ];
-}
-
+            'default_variant.sku' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
+        ];
+    }
 }

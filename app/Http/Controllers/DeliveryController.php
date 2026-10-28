@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Deliveries\ConfirmDeliveryReturn;
 use App\Actions\Deliveries\AssignDeliveryAgent;
+use App\Actions\Deliveries\ConfirmDeliveryReturn;
 use App\Actions\Deliveries\UpdateDeliveryStatus;
 use App\Models\Delivery;
 use App\Models\User;
-use Illuminate\Auth\Access\AuthorizationException;
+use App\Support\DeliveryAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -21,8 +21,8 @@ class DeliveryController extends Controller
         $user = $this->authorizeViewer($request);
 
         $query = Delivery::query()
-            ->where('store_id', $user->store_id);
-
+            ->where('store_id', $user->store_id)
+            ->whereHas('order', fn ($query) => $query->where('store_id', $user->store_id)->where('fulfillment_type', 'DELIVERY'));
 
         if (
             ! $user->hasRole('STORE_OWNER') &&
@@ -31,7 +31,6 @@ class DeliveryController extends Controller
             // Le livreur voit uniquement ses livraisons.
             $query->where('assigned_to', $user->id);
         }
-
 
         return response()->json(
             $query->orderByDesc('id')->paginate(20)
@@ -48,8 +47,8 @@ class DeliveryController extends Controller
         $user = $this->authorizeViewer($request);
 
         $query = Delivery::query()
-            ->where('store_id', $user->store_id);
-
+            ->where('store_id', $user->store_id)
+            ->whereHas('order', fn ($query) => $query->where('store_id', $user->store_id)->where('fulfillment_type', 'DELIVERY'));
 
         if (
             ! $user->hasRole('STORE_OWNER') &&
@@ -59,7 +58,6 @@ class DeliveryController extends Controller
             // aux livraisons qui lui sont attribuées.
             $query->where('assigned_to', $user->id);
         }
-
 
         $delivery = $query
             ->whereKey($deliveryId)
@@ -137,30 +135,10 @@ class DeliveryController extends Controller
     /**
      * Autorisation de consultation.
      */
-
     private function authorizeViewer(Request $request): User
     {
-        $user = $request->user();
-
-        if (
-            ! $user instanceof User ||
-            $user->store_id === null ||
-            ! $user->hasPermission('deliveries.view') ||
-            (
-                ! $user->hasRole('STORE_OWNER') &&
-                ! $user->hasRole('STORE_MANAGER') &&
-                ! $user->hasRole('DELIVERY_AGENT')
-            )
-        ) {
-            throw new AuthorizationException(
-                __('deliveries.access_denied')
-            );
-        }
-
-        return $user;
+        return DeliveryAccess::viewer($request->user('web'));
     }
-
-
 
     /**
      * Confirmer la réception physique d'un colis retourné.

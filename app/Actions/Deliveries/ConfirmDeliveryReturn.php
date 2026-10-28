@@ -1,12 +1,13 @@
 <?php
-namespace App\Actions\Deliveries;
 
+namespace App\Actions\Deliveries;
 
 use App\Models\Delivery;
 use App\Models\Order;
 use App\Models\StockLevel;
 use App\Models\StockReservation;
 use App\Models\User;
+use App\Support\DeliveryAccess;
 use App\Support\TenantContext;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +20,7 @@ final class ConfirmDeliveryReturn
         ?string $notes = null
     ): Delivery {
         $storeId = app(TenantContext::class)->storeId();
-        $user = auth()->user();
+        $user = DeliveryAccess::viewer(auth('web')->user());
 
         if (
             ! $user instanceof User ||
@@ -36,8 +37,7 @@ final class ConfirmDeliveryReturn
 
         if (mb_strlen($notes) > 1000) {
             throw ValidationException::withMessages([
-                'return_notes' =>
-                    __('deliveries.return_notes_too_long'),
+                'return_notes' => __('deliveries.return_notes_too_long'),
             ]);
         }
 
@@ -90,8 +90,7 @@ final class ConfirmDeliveryReturn
                 $delivery->delivered_at !== null
             ) {
                 throw ValidationException::withMessages([
-                    'delivery' =>
-                        __('deliveries.return_package_must_have_failed'),
+                    'delivery' => __('deliveries.return_package_must_have_failed'),
                 ]);
             }
 
@@ -123,8 +122,7 @@ final class ConfirmDeliveryReturn
                         ->exists()
                 ) {
                     throw ValidationException::withMessages([
-                        'payment_status' =>
-                            __('deliveries.return_confirmed_payment_requires_review'),
+                        'payment_status' => __('deliveries.return_confirmed_payment_requires_review'),
                     ]);
                 }
 
@@ -138,14 +136,12 @@ final class ConfirmDeliveryReturn
                 if (
                     $reservations->isEmpty() ||
                     $reservations->contains(
-                        fn ($reservation) =>
-                            $reservation->status !== 'ACTIVE' ||
+                        fn ($reservation) => $reservation->status !== 'ACTIVE' ||
                             (int) $reservation->store_id !== (int) $storeId
                     )
                 ) {
                     throw ValidationException::withMessages([
-                        'stock' =>
-                            __('deliveries.return_stock_reservations_inconsistent'),
+                        'stock' => __('deliveries.return_stock_reservations_inconsistent'),
                     ]);
                 }
 
@@ -169,8 +165,7 @@ final class ConfirmDeliveryReturn
                     $orderedQuantities !== $reservedQuantities
                 ) {
                     throw ValidationException::withMessages([
-                        'stock' =>
-                            __('deliveries.return_reservations_do_not_match_order'),
+                        'stock' => __('deliveries.return_reservations_do_not_match_order'),
                     ]);
                 }
 

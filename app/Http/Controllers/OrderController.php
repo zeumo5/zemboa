@@ -1,13 +1,12 @@
 <?php
-namespace App\Http\Controllers;
 
+namespace App\Http\Controllers;
 
 use App\Models\Order;
 use App\Models\User;
-use App\Support\TenantContext;
-use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class OrderController extends Controller
 {
@@ -81,20 +80,7 @@ class OrderController extends Controller
     {
         $user = $request->user();
 
-        if (
-            ! $user instanceof User ||
-            (int) $user->store_id !==
-                app(TenantContext::class)->storeId() ||
-            ! $user->hasPermission('orders.view') ||
-            (
-                ! $user->hasRole('STORE_OWNER') &&
-                ! $user->hasRole('STORE_MANAGER')
-            )
-        ) {
-            throw new AuthorizationException(
-                'Consultation des commandes non autorisée.'
-            );
-        }
+        Gate::forUser($user)->authorize('viewAny', Order::class);
 
         return $user;
     }

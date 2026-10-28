@@ -1,0 +1,28 @@
+<?php
+
+return [
+    'title' => 'My team', 'intro' => 'Manage professional access to your store.',
+    'invite' => 'Invite a team member', 'name' => 'Name', 'email' => 'Email', 'phone' => 'Professional phone',
+    'role' => 'Role', 'status' => 'Account status', 'invitation' => 'Invitation', 'created' => 'Created', 'actions' => 'Actions',
+    'search' => 'Search team members', 'filter' => 'Filter', 'all' => 'All', 'reset' => 'Reset', 'empty' => 'No team members match these filters.',
+    'roles' => ['STORE_OWNER' => 'Owner', 'STORE_MANAGER' => 'Manager', 'CASHIER' => 'Cashier', 'DELIVERY_AGENT' => 'Delivery agent'],
+    'statuses' => ['INVITED' => 'Invited', 'ACTIVE' => 'Active', 'INACTIVE' => 'Access disabled'],
+    'states' => ['pending' => 'Pending', 'expired' => 'Expired', 'absent' => 'Absent or revoked', 'accepted' => 'Accepted', 'disabled' => 'Invitation disabled'],
+    'resend' => 'Resend invitation', 'revoke' => 'Revoke link', 'disable' => 'Disable access', 'enable' => 'Restore access',
+    'invited' => 'Team member invited.', 'resent' => 'A new invitation has been sent.', 'revoked' => 'Invitation link revoked.',
+    'status_updated' => 'Account status updated.', 'role_updated' => 'Role updated.', 'wait' => 'Please wait before resending an invitation.',
+    'must_accept' => 'The invitation must be accepted before activation.', 'invalid_phone' => 'Enter a valid Cameroonian mobile number.',
+    'identity_conflict' => 'These contact details are already in use. No existing account will be linked.',
+    'form_hint' => 'The team member sets their own password using a temporary link. No password is sent by email.',
+    'phone_hint' => 'Format example: +237 6XX XX XX XX. This phone is not verified by SMS.',
+    'state_hint' => 'An absent link cannot distinguish a never-issued invitation from a revoked link. Account creation is not a last-login date.',
+    'manager_space' => 'Manager space', 'your_role' => 'Your role', 'role_hint' => 'Access granted by your store’s current permissions.',
+    'limits' => 'Team management remains owner-only. This interface grants no additional financial or administrative access.',
+    'activation_title' => 'Activate my professional account', 'activation_intro' => 'Set your password to join your store.',
+    'password' => 'Password (at least 12 characters)', 'confirmation' => 'Confirm password', 'activate' => 'Activate my account',
+    'activated' => 'Account activated', 'activated_hint' => 'Your password has been saved. Sign in using the professional portal.', 'login' => 'Professional sign in',
+    'invalid_invitation' => 'Invalid, expired or unauthorised invitation.',
+    'mail_subject' => 'Invitation to join ZEMBOA', 'mail_greeting' => 'Welcome to ZEMBOA!',
+    'mail_intro' => 'You have been invited to join a team on ZEMBOA.', 'mail_action' => 'Set your own password using this secure link.',
+    'mail_expiry' => 'This link expires after :minutes minutes.', 'mail_ignore' => 'If you do not recognise this invitation, ignore this email.',
+];

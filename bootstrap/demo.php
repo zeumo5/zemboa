@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Support\DemoConnectionFactory;
 use App\Support\DemoDatabase;
+use App\Support\DemoMail;
+use Illuminate\Contracts\Config\Repository;
 use Illuminate\Foundation\Bootstrap\LoadConfiguration;
 use Illuminate\Foundation\Bootstrap\LoadEnvironmentVariables;
 
@@ -55,7 +57,7 @@ $app->instance(LoadEnvironmentVariables::class, new class extends LoadEnvironmen
 // Do not evaluate the normal database.php (MySQL options and platform-specific constants).
 $app->instance(LoadConfiguration::class, new class extends LoadConfiguration
 {
-    protected function loadConfigurationFile(\Illuminate\Contracts\Config\Repository $repository, $name, $path, array $base)
+    protected function loadConfigurationFile(Repository $repository, $name, $path, array $base)
     {
         if ($name === 'database') {
             $repository->set('database', require __DIR__.'/demo-database.php');
@@ -88,8 +90,7 @@ $app->afterBootstrapping(LoadConfiguration::class, function ($app) use ($local):
     $config->set('queue.connections', ['null' => ['driver' => 'null']]);
     $config->set('queue.failed.driver', 'null');
     $config->set('queue.batching.database', 'sqlite_demo');
-    $config->set('mail.default', 'array');
-    $config->set('mail.mailers', ['array' => ['transport' => 'array']]);
+    DemoMail::configure($app, $local['DEMO_MAIL_TRANSPORT'] ?? 'array');
     $config->set('broadcasting.default', 'null');
     $config->set('broadcasting.connections', ['null' => ['driver' => 'null']]);
     $config->set('database.redis', []);

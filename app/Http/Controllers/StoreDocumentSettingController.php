@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-
 use App\Models\StoreDocumentSetting;
 use App\Models\User;
+use App\Support\AccountDestination;
 use App\Support\TenantContext;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
@@ -125,6 +125,7 @@ final class StoreDocumentSettingController extends Controller
             ->exists();
 
         if (
+            ! AccountDestination::professionalIdentity($actor) ||
             $storeId === null ||
             (int) $actor->store_id !== (int) $storeId ||
             $actor->status !== 'ACTIVE' ||

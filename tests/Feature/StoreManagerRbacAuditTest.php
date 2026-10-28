@@ -1,13 +1,14 @@
 <?php
+
 namespace Tests\Feature;
 
-use App\Models\StockLevel;
-use Illuminate\Support\Facades\Gate;
 use App\Models\Role;
+use App\Models\StockLevel;
 use App\Models\Store;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Gate;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -52,6 +53,13 @@ class StoreManagerRbacAuditTest extends TestCase
             'customers.view',
             'deliveries.view',
             'deliveries.update',
+            'pos.registers.view',
+            'pos.registers.manage',
+            'pos.sessions.open',
+            'pos.sessions.close',
+            'pos.sales.create',
+            'store.document_settings.view',
+            'store.document_settings.update',
         ];
 
         sort($expected);
@@ -73,6 +81,7 @@ class StoreManagerRbacAuditTest extends TestCase
             ->firstOrFail();
 
         $forbidden = [
+            'pos.cash_movements.manage',
             'payments.confirm',
             'payments.view',
             'refunds.manage',
@@ -138,107 +147,106 @@ class StoreManagerRbacAuditTest extends TestCase
         );
     }
 
-public function test_manager_can_manage_stock_in_own_store(): void
-{
-    $this->seed(DatabaseSeeder::class);
+    public function test_manager_can_manage_stock_in_own_store(): void
+    {
+        $this->seed(DatabaseSeeder::class);
 
-    $store = Store::create([
-        'name' => 'Boutique Manager Stock',
-        'slug' => 'manager-stock',
-        'status' => 'ACTIVE',
-    ]);
+        $store = Store::create([
+            'name' => 'Boutique Manager Stock',
+            'slug' => 'manager-stock',
+            'status' => 'ACTIVE',
+        ]);
 
-    $manager = User::factory()->create([
-        'store_id' => $store->id,
-        'status' => 'ACTIVE',
-    ]);
-
-    $role = Role::where('code', 'STORE_MANAGER')
-        ->firstOrFail();
-
-    $manager->roles()->attach($role->id);
-
-    // Objet utilisé uniquement pour tester la politique.
-    $stockLevel = new StockLevel();
-    $stockLevel->store_id = $store->id;
-
-    $this->assertTrue(
-        Gate::forUser($manager)->allows('view', $stockLevel)
-    );
-
-    $this->assertTrue(
-        Gate::forUser($manager)->allows('manage', $stockLevel)
-    );
-}
-
-public function test_cashier_and_delivery_agent_cannot_manage_stock(): void
-{
-    $this->seed(DatabaseSeeder::class);
-
-    $store = Store::create([
-        'name' => 'Boutique Audit Employes',
-        'slug' => 'audit-employes-stock',
-        'status' => 'ACTIVE',
-    ]);
-
-    $stockLevel = new StockLevel();
-    $stockLevel->store_id = $store->id;
-
-    foreach (['CASHIER', 'DELIVERY_AGENT'] as $roleCode) {
-        $user = User::factory()->create([
+        $manager = User::factory()->create([
             'store_id' => $store->id,
             'status' => 'ACTIVE',
         ]);
 
-        $role = Role::where('code', $roleCode)
+        $role = Role::where('code', 'STORE_MANAGER')
             ->firstOrFail();
 
-        $user->roles()->attach($role->id);
+        $manager->roles()->attach($role->id);
 
-        $this->assertFalse(
-            Gate::forUser($user)->allows('manage', $stockLevel),
-            "Le rôle {$roleCode} ne doit pas gérer les stocks."
+        // Objet utilisé uniquement pour tester la politique.
+        $stockLevel = new StockLevel;
+        $stockLevel->store_id = $store->id;
+
+        $this->assertTrue(
+            Gate::forUser($manager)->allows('view', $stockLevel)
+        );
+
+        $this->assertTrue(
+            Gate::forUser($manager)->allows('manage', $stockLevel)
         );
     }
-}
 
-public function test_manager_cannot_manage_another_store_stock(): void
-{
-    $this->seed(DatabaseSeeder::class);
+    public function test_cashier_and_delivery_agent_cannot_manage_stock(): void
+    {
+        $this->seed(DatabaseSeeder::class);
 
-    $storeA = Store::create([
-        'name' => 'Boutique Alpha',
-        'slug' => 'audit-alpha-stock',
-        'status' => 'ACTIVE',
-    ]);
+        $store = Store::create([
+            'name' => 'Boutique Audit Employes',
+            'slug' => 'audit-employes-stock',
+            'status' => 'ACTIVE',
+        ]);
 
-    $storeB = Store::create([
-        'name' => 'Boutique Beta',
-        'slug' => 'audit-beta-stock',
-        'status' => 'ACTIVE',
-    ]);
+        $stockLevel = new StockLevel;
+        $stockLevel->store_id = $store->id;
 
-    $manager = User::factory()->create([
-        'store_id' => $storeA->id,
-        'status' => 'ACTIVE',
-    ]);
+        foreach (['CASHIER', 'DELIVERY_AGENT'] as $roleCode) {
+            $user = User::factory()->create([
+                'store_id' => $store->id,
+                'status' => 'ACTIVE',
+            ]);
 
-    $role = Role::where('code', 'STORE_MANAGER')
-        ->firstOrFail();
+            $role = Role::where('code', $roleCode)
+                ->firstOrFail();
 
-    $manager->roles()->attach($role->id);
+            $user->roles()->attach($role->id);
 
-    // Le stock appartient à la boutique B.
-    $foreignStock = new StockLevel();
-    $foreignStock->store_id = $storeB->id;
+            $this->assertFalse(
+                Gate::forUser($user)->allows('manage', $stockLevel),
+                "Le rôle {$roleCode} ne doit pas gérer les stocks."
+            );
+        }
+    }
 
-    $this->assertFalse(
-        Gate::forUser($manager)->allows('view', $foreignStock)
-    );
+    public function test_manager_cannot_manage_another_store_stock(): void
+    {
+        $this->seed(DatabaseSeeder::class);
 
-    $this->assertFalse(
-        Gate::forUser($manager)->allows('manage', $foreignStock)
-    );
-}
+        $storeA = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'audit-alpha-stock',
+            'status' => 'ACTIVE',
+        ]);
 
+        $storeB = Store::create([
+            'name' => 'Boutique Beta',
+            'slug' => 'audit-beta-stock',
+            'status' => 'ACTIVE',
+        ]);
+
+        $manager = User::factory()->create([
+            'store_id' => $storeA->id,
+            'status' => 'ACTIVE',
+        ]);
+
+        $role = Role::where('code', 'STORE_MANAGER')
+            ->firstOrFail();
+
+        $manager->roles()->attach($role->id);
+
+        // Le stock appartient à la boutique B.
+        $foreignStock = new StockLevel;
+        $foreignStock->store_id = $storeB->id;
+
+        $this->assertFalse(
+            Gate::forUser($manager)->allows('view', $foreignStock)
+        );
+
+        $this->assertFalse(
+            Gate::forUser($manager)->allows('manage', $foreignStock)
+        );
+    }
 }

@@ -32,3 +32,17 @@
 @import './catalog.css';
 
 @import './categories.css';
+
+@import './customer.css';
+
+@import './professional.css';
+@import './pos.css';
+@import './courier.css';
+@import './auth-ui.css';
+@import './professional-catalog.css';
+@import './professional-inventory.css';
+@import './professional-sales.css';
+@import './admin.css';
+@import './store-customization.css';
+
+@import './promotions.css';

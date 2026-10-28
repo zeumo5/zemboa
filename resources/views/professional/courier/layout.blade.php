@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="{{ str_replace('_','-',app()->getLocale()) }}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>@yield('title') — ZEMBOA</title><link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">@vite(['resources/css/app.css', 'resources/js/app.js'])</head>
+<body class="professional-site courier-site">
+<a class="zm-skip-link" href="#courier-main">{{ __('marketplace.skip_to_content') }}</a>
+<aside class="courier-sidebar"><a class="courier-brand" href="{{ route('courier.index') }}"><img src="{{ asset('marketplace/zemboa-mark.svg') }}" width="38" height="38" alt=""><strong>ZEMBOA<span>.</span></strong></a><p class="courier-space">{{ __('courier.space') }}</p><nav aria-label="{{ __('courier.space') }}">@include('professional.courier.navigation')</nav><form method="post" action="{{ route('logout') }}">@csrf<button type="submit">{{ __('buyer.logout') }}</button></form></aside>
+<div class="courier-shell"><header class="courier-header"><a class="courier-mobile-brand" href="{{ route('courier.index') }}"><img src="{{ asset('marketplace/zemboa-mark.svg') }}" width="32" height="32" alt=""><strong>ZEMBOA</strong></a><div class="courier-store">@include('marketplace.partials.commerce-icon',['icon'=>'store'])<div><strong>{{ $store->name }}</strong>@if($store->address)<small>{{ $store->address }}</small>@endif</div></div><div class="courier-identity"><strong>{{ $actor->name }}</strong><small>{{ __('team.roles.DELIVERY_AGENT') }}</small></div><details class="pro-menu courier-menu"><summary aria-label="{{ __('professional.menu') }}">☰</summary><div>@include('professional.courier.navigation')<form method="post" action="{{ route('logout') }}">@csrf<button type="submit">{{ __('buyer.logout') }}</button></form></div></details></header>
+<main id="courier-main" tabindex="-1">@if(session('courier_success'))<p class="courier-notice" role="status">{{ session('courier_success') }}</p>@endif
+@if($errors->any())<div class="courier-error" role="alert"><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
+@yield('content')</main><footer class="courier-footer">{{ __('courier.privacy') }} · ZEMBOA</footer></div>
+</body></html>

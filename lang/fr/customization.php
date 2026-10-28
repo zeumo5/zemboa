@@ -1,0 +1,28 @@
+<?php
+
+return [
+    'title' => 'Personnalisation de ma boutique', 'intro' => 'Préparez votre identité et vos informations en privé, puis publiez vos modifications lorsque vous êtes prêt.',
+    'identity' => 'Identité', 'appearance' => 'Apparence', 'information' => 'Informations', 'hours' => 'Horaires et langue', 'commerce' => 'Paramètres commerciaux', 'documents' => 'Préférences documentaires', 'preview' => 'Prévisualiser',
+    'identity_hint' => 'Nom, description, logo et bannière', 'appearance_hint' => 'Couleur et identité visuelle', 'information_hint' => 'Coordonnées publiques de la boutique', 'hours_hint' => 'Horaires informatifs et langue', 'commerce_hint' => 'Livraison, retrait, acomptes et retours', 'documents_hint' => 'Factures et tickets POS',
+    'name' => 'Nom commercial', 'slogan' => 'Slogan', 'description' => 'Description', 'address' => 'Adresse publique', 'email' => 'E-mail public', 'phone' => 'Téléphone public', 'whatsapp' => 'WhatsApp', 'slug' => 'Adresse de la vitrine — lecture seule',
+    'logo' => 'Logo de la boutique', 'banner' => 'Bannière principale', 'remove_logo' => 'Supprimer le logo à la publication', 'remove_banner' => 'Supprimer la bannière à la publication',
+    'logo_help' => 'JPEG, PNG ou WebP · 2 Mo maximum · 16 à 2 000 px. Pour les factures POS : PNG/JPEG, 512 Ko maximum.',
+    'banner_help' => 'JPEG, PNG ou WebP · 5 Mo maximum · 16 à 4 096 px. Format large recommandé.',
+    'no_media' => 'Aucun visuel : le remplacement graphique sera utilisé.', 'color' => 'Couleur principale', 'contrast' => 'Les accents trop clairs sont assombris au rendu pour conserver un texte blanc lisible.',
+    'save' => 'Enregistrer le brouillon', 'publish' => 'Publier les modifications', 'discard' => 'Abandonner le brouillon', 'view' => 'Voir ma boutique', 'draft' => 'Brouillon privé', 'live' => 'Version publiée', 'readonly' => 'Consultation uniquement : vous ne pouvez pas modifier ni consulter le brouillon du propriétaire.',
+    'saved' => 'Brouillon enregistré. La vitrine publique reste inchangée.', 'published' => 'Les modifications ont été publiées.', 'discarded' => 'Le brouillon a été abandonné. La version publiée est conservée.',
+    'publish_confirm' => 'Publier toutes les rubriques enregistrées, y compris les changements commerciaux éventuels ?', 'discard_confirm' => 'Abandonner les modifications privées enregistrées ?',
+    'empty' => 'Aucune modification enregistrée à publier.', 'unsaved' => 'Enregistrez votre formulaire avant de prévisualiser : l’aperçu affiche uniquement le brouillon sauvegardé.',
+    'setup' => 'La personnalisation nécessite la migration dédiée. Aucune modification ne peut être enregistrée.', 'stale' => 'Le brouillon a changé. Rechargez la page avant de continuer.',
+    'stale_publication' => 'La configuration publiée a changé depuis ce brouillon. Conservez vos modifications, puis abandonnez et recréez le brouillon avant de publier.',
+    'no_draft' => 'Aucun brouillon à publier.', 'storage_failed' => 'Le visuel ne peut pas être enregistré. Réessayez plus tard.', 'missing_media' => 'Un visuel du brouillon est indisponible. Remplacez-le avant de publier.', 'media_conflict' => 'Choisissez un nouveau visuel ou sa suppression, pas les deux.',
+    'hours_invalid' => 'L’heure de fermeture doit suivre l’heure d’ouverture. Les plages passant minuit ne sont pas prises en charge.',
+    'hours_info' => 'Horaires informatifs uniquement : ils ne ferment pas automatiquement le checkout. Laissez un jour vide pour ne pas le publier.', 'locale' => 'Langue par défaut', 'open' => 'Ouverture', 'close' => 'Fermeture',
+    'delivery_enabled' => 'Autoriser la livraison', 'pickup_enabled' => 'Autoriser le retrait en boutique', 'reservation_duration_minutes' => 'Durée des réservations (minutes)', 'allow_partial_payments' => 'Autoriser les acomptes dans le parcours espèces existant', 'minimum_deposit_percent' => 'Premier acompte minimum (%)', 'returns_enabled' => 'Autoriser les demandes de retour', 'return_window_days' => 'Délai de retour (jours)', 'low_stock_threshold' => 'Seuil de stock pour les nouvelles variantes',
+    'commerce_info' => 'Ces réglages ont un effet métier à la publication. La livraison nécessite une zone active et son tarif serveur. Les commandes existantes conservent leurs montants et échéances. Aucun paiement en ligne réel n’est activé.',
+    'unconfigured' => 'Les règles commerciales n’ont pas été configurées explicitement. Enregistrer l’identité ou l’apparence ne les active pas. Publier cette rubrique les configure.',
+    'threshold_info' => 'Le seuil ne modifie pas les variantes existantes. Les réservations sont créées au checkout ; aucune expiration automatique n’est activée ici.',
+    'documents_info' => 'Les paramètres existants des factures et tickets sont disponibles dans la caisse. Ils sont enregistrés immédiatement par leur parcours actuel, séparément de ce brouillon.', 'open_documents' => 'Ouvrir les préférences dans la caisse',
+    'desktop' => 'Ordinateur', 'mobile' => 'Téléphone', 'preview_info' => 'Aperçu privé du brouillon sauvegardé. Les liens de la vitrine ouvrent la version publique ; les achats restent bloqués avec une session professionnelle.',
+    'preview_label' => 'Aperçu privé de la vitrine', 'selected_file' => 'Visuel sélectionné — non encore enregistré', 'public_info' => 'Ces coordonnées seront visibles publiquement après publication. Elles ne modifient pas votre compte de connexion.',
+];

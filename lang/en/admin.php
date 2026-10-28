@@ -1,0 +1,28 @@
+<?php
+
+return [
+    'space' => 'Super administration', 'dashboard' => 'Dashboard', 'stores' => 'Stores',
+    'welcome' => 'ZEMBOA platform administration', 'intro' => 'Supervise stores and support their owners.',
+    'active' => 'Active stores', 'pending' => 'Awaiting activation', 'inactive' => 'Disabled stores', 'professionals' => 'Professional users',
+    'recent' => 'Recent stores', 'all' => 'All stores', 'create' => 'Create a store', 'view' => 'View', 'platform' => 'View the platform', 'menu' => 'Administrator menu',
+    'logout' => 'Log out', 'login' => 'Administrator sign in', 'email' => 'Email', 'password' => 'Password', 'connect' => 'Sign in',
+    'name' => 'Store name', 'slug' => 'Slug', 'description' => 'Description', 'phone' => 'Phone', 'address' => 'Address',
+    'owner' => 'Owner', 'owner_name' => 'Owner name', 'owner_email' => 'Owner email', 'date' => 'Created on', 'status' => 'Status',
+    'search' => 'Search', 'search_hint' => 'Store name or slug', 'filter' => 'Filter', 'any' => 'All statuses', 'reset' => 'Reset filters',
+    'empty' => 'No stores to display.', 'not_recorded' => 'Not recorded', 'back' => 'Back to stores', 'details' => 'Store information', 'new_owner' => 'New owner to invite',
+    'creation_hint' => 'The store starts pending. An invited owner account is created with an undisclosed random secret. No existing account is linked.',
+    'owner_hint' => 'Use an available email address. The owner sets their own password through the invitation.',
+    'created' => 'Pending store created. You can now send the owner invitation.',
+    'email_used' => 'This email is already used. No existing account will be changed or linked.',
+    'invite' => 'Send owner invitation', 'invitation_sent' => 'Invitation handed to the configured mail service.',
+    'invite_hint' => 'Single-use link valid for 60 minutes. Activating the account does not automatically activate the store.',
+    'invite_unavailable' => 'Invitation unavailable: a unique, invited, unverified owner with only STORE_OWNER is required, in a pending or active store.',
+    'activation' => 'Administrative decision', 'reason' => 'Decision reason', 'reason_hint' => '10 to 500 characters. This reason is kept in the decision history.',
+    'apply' => 'Record decision', 'status_updated' => 'Status updated and decision recorded.',
+    'activation_hint' => 'Activation requires a unique, active, verified owner with only STORE_OWNER. Disabling applies the existing restrictions.',
+    'history' => 'Decision history', 'no_history' => 'No recorded decisions.', 'distribution' => 'Store breakdown',
+    'future' => 'Public store applications and full user management will be developed later.',
+    'validation' => 'Please correct the indicated fields.', 'required' => 'Fields marked * are required.',
+    'statuses' => ['PENDING' => 'Pending', 'ACTIVE' => 'Active', 'INACTIVE' => 'Inactive', 'SUSPENDED' => 'Suspended'],
+    'user_statuses' => ['INVITED' => 'Invited', 'ACTIVE' => 'Active', 'INACTIVE' => 'Inactive', 'SUSPENDED' => 'Suspended'],
+];

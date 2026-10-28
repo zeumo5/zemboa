@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
-use Carbon\CarbonInterface;
-use Illuminate\Support\Carbon;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use App\Models\Concerns\BelongsToStore;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 
 #[Fillable([
     'product_id',
@@ -32,39 +32,49 @@ class ProductVariant extends Model
     }
 
     public function attributeValues(): BelongsToMany
-{
-    return $this->belongsToMany(
-        AttributeValue::class,
-        'product_variant_attribute_value'
-    )->withTimestamps();
-}
-
-public function effectivePrice(?CarbonInterface $at = null): string
-{
-    if ($this->promo_price === null) {
-        return $this->price;
+    {
+        return $this->belongsToMany(
+            AttributeValue::class,
+            'product_variant_attribute_value'
+        )->withTimestamps();
     }
 
-    $at ??= Carbon::now();
+    public function promotionStatus(?CarbonInterface $at = null): string
+    {
+        $at ??= Carbon::now();
 
-    if (
-        $this->promo_starts_at !== null
-        && $at->lt($this->promo_starts_at)
-    ) {
-        return $this->price;
+        return match (true) {
+            $this->promo_price === null => 'none',
+            $this->promo_starts_at !== null && $at->lt($this->promo_starts_at) => 'scheduled',
+            $this->promo_ends_at !== null && $at->gt($this->promo_ends_at) => 'expired',
+            default => 'active',
+        };
     }
 
-    if (
-        $this->promo_ends_at !== null
-        && $at->gt($this->promo_ends_at)
-    ) {
-        return $this->price;
+    public function effectivePrice(?CarbonInterface $at = null): string
+    {
+        if ($this->promo_price === null) {
+            return $this->price;
+        }
+
+        $at ??= Carbon::now();
+
+        if (
+            $this->promo_starts_at !== null
+            && $at->lt($this->promo_starts_at)
+        ) {
+            return $this->price;
+        }
+
+        if (
+            $this->promo_ends_at !== null
+            && $at->gt($this->promo_ends_at)
+        ) {
+            return $this->price;
+        }
+
+        return $this->promo_price;
     }
-
-    return $this->promo_price;
-}
-
-    
 
     protected function casts(): array
     {
@@ -76,19 +86,19 @@ public function effectivePrice(?CarbonInterface $at = null): string
             'is_default' => 'boolean',
         ];
     }
-public function stockLevel(): HasOne
-{
-    return $this->hasOne(StockLevel::class);
-}
 
-public function stockMovements(): HasMany
-{
-    return $this->hasMany(StockMovement::class);
-}
+    public function stockLevel(): HasOne
+    {
+        return $this->hasOne(StockLevel::class);
+    }
 
-public function stockReservations(): HasMany
-{
-    return $this->hasMany(StockReservation::class);
-}
-    
+    public function stockMovements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class);
+    }
+
+    public function stockReservations(): HasMany
+    {
+        return $this->hasMany(StockReservation::class);
+    }
 }

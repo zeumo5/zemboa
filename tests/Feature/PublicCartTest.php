@@ -2,14 +2,21 @@
 
 namespace Tests\Feature;
 
-
+use App\Actions\ProductVariant\AttachAttributeValue;
+use App\Models\Attribute;
+use App\Models\AttributeValue;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\StockLevel;
 use App\Models\Store;
+use App\Models\User;
 use App\Support\TenantContext;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class PublicCartTest extends TestCase
@@ -35,7 +42,7 @@ class PublicCartTest extends TestCase
     private function createShop(string $slug): ProductVariant
     {
         $store = Store::create([
-            'name' => 'Boutique ' . $slug,
+            'name' => 'Boutique '.$slug,
             'slug' => $slug,
             'status' => 'ACTIVE',
         ]);
@@ -44,20 +51,20 @@ class PublicCartTest extends TestCase
 
         $category = Category::create([
             'name' => 'Téléphones',
-            'slug' => 'telephones-' . $slug,
+            'slug' => 'telephones-'.$slug,
             'status' => 'ACTIVE',
         ]);
 
         $product = Product::create([
             'category_id' => $category->id,
-            'name' => 'Produit ' . $slug,
-            'slug' => 'produit-' . $slug,
+            'name' => 'Produit '.$slug,
+            'slug' => 'produit-'.$slug,
             'status' => 'ACTIVE',
         ]);
 
         $variant = ProductVariant::create([
             'product_id' => $product->id,
-            'sku' => 'CART-' . strtoupper($slug),
+            'sku' => 'CART-'.strtoupper($slug),
             'price' => '5000.00',
             'is_default' => true,
             'status' => 'ACTIVE',
@@ -85,23 +92,23 @@ class PublicCartTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath(
-                'data.items.' . $variant->id,
+                'data.items.'.$variant->id,
                 2
             );
 
-        $this->patchJson($url . '/' . $variant->id, [
+        $this->patchJson($url.'/'.$variant->id, [
             'quantity' => 3,
         ])
             ->assertOk()
             ->assertJsonPath(
-                'data.items.' . $variant->id,
+                'data.items.'.$variant->id,
                 3
             );
 
         $this->getJson('/shops/alpha/cart')
             ->assertOk()
             ->assertJsonPath(
-                'data.items.' . $variant->id,
+                'data.items.'.$variant->id,
                 3
             );
 
@@ -110,7 +117,7 @@ class PublicCartTest extends TestCase
         $this->assertSame(10, $stock->physical_quantity);
         $this->assertSame(2, $stock->reserved_quantity);
 
-        $this->deleteJson($url . '/' . $variant->id)
+        $this->deleteJson($url.'/'.$variant->id)
             ->assertOk()
             ->assertJsonPath('data.items', []);
     }
@@ -134,7 +141,7 @@ class PublicCartTest extends TestCase
 
         $this->getJson('/shops/alpha/cart')
             ->assertJsonPath(
-                'data.items.' . $variantA->id,
+                'data.items.'.$variantA->id,
                 1
             );
 
@@ -219,7 +226,6 @@ class PublicCartTest extends TestCase
         $this->assertDatabaseCount('stock_reservations', 0);
     }
 
-
     public function test_guest_checkout_creates_order_and_reserves_stock(): void
     {
         $variant = $this->createShop('alpha');
@@ -229,6 +235,8 @@ class PublicCartTest extends TestCase
             'product_variant_id' => $variant->id,
             'quantity' => 2,
         ])->assertOk();
+        $this->withCookie(config('session.cookie'), session()->getId())->withCredentials();
+        $this->getJson('/shops/alpha/checkout?fulfillment_type=PICKUP')->assertOk();
 
         // Valider la commande sans compte utilisateur.
         $response = $this->postJson('/shops/alpha/checkout', [
@@ -275,6 +283,8 @@ class PublicCartTest extends TestCase
             'product_variant_id' => $variant->id,
             'quantity' => 3,
         ])->assertOk();
+        $this->withCookie(config('session.cookie'), session()->getId())->withCredentials();
+        $this->getJson('/shops/alpha/checkout?fulfillment_type=PICKUP')->assertOk();
 
         // Simuler une diminution du stock disponible.
         $stock = $variant->stockLevel()->firstOrFail();
@@ -300,7 +310,7 @@ class PublicCartTest extends TestCase
         $this->getJson('/shops/alpha/cart')
             ->assertOk()
             ->assertJsonPath(
-                'data.items.' . $variant->id,
+                'data.items.'.$variant->id,
                 3
             )
             ->assertJsonPath('data.can_checkout', false);
@@ -368,6 +378,8 @@ class PublicCartTest extends TestCase
             'product_variant_id' => $variant->id,
             'quantity' => 2,
         ])->assertOk();
+        $this->withCookie(config('session.cookie'), session()->getId())->withCredentials();
+        $this->getJson('/shops/alpha/checkout?fulfillment_type=PICKUP')->assertOk();
 
         // Passer commande.
         $response = $this->postJson(
@@ -462,7 +474,7 @@ class PublicCartTest extends TestCase
         $this->getJson('/shops/alpha/cart')
             ->assertOk()
             ->assertJsonPath(
-                'data.items.' . $variant->id,
+                'data.items.'.$variant->id,
                 1
             );
     }
@@ -480,6 +492,8 @@ class PublicCartTest extends TestCase
             'product_variant_id' => $variant->id,
             'quantity' => 3,
         ])->assertOk();
+        $this->withCookie(config('session.cookie'), session()->getId())->withCredentials();
+        $this->getJson('/shops/alpha/checkout?fulfillment_type=PICKUP')->assertOk();
 
         // Simuler une diminution du stock disponible.
         $stock = $variant->stockLevel()->firstOrFail();
@@ -508,7 +522,7 @@ class PublicCartTest extends TestCase
         $this->getJson('/shops/alpha/cart')
             ->assertOk()
             ->assertJsonPath(
-                'data.items.' . $variant->id,
+                'data.items.'.$variant->id,
                 3
             );
     }
@@ -562,9 +576,13 @@ class PublicCartTest extends TestCase
         $this->createShop('alpha');
         $this->withSession(['locale' => 'en'])->get('/boutiques/alpha/panier')
             ->assertOk()->assertSee('Continue exploring');
-        $this->app->instance(\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class,
-            new class($this->app, $this->app->make('encrypter')) extends \Illuminate\Foundation\Http\Middleware\PreventRequestForgery {
-                protected function runningUnitTests() { return false; }
+        $this->app->instance(PreventRequestForgery::class,
+            new class($this->app, $this->app->make('encrypter')) extends PreventRequestForgery
+            {
+                protected function runningUnitTests()
+                {
+                    return false;
+                }
             });
         $this->postJson('/shops/alpha/cart/items', [])->assertStatus(419);
         $this->patchJson('/shops/alpha/cart/items/1', ['quantity' => 1])->assertStatus(419);
@@ -597,15 +615,17 @@ class PublicCartTest extends TestCase
         $a->stockLevel->update(['physical_quantity' => 2]);
         $this->get('/produits')->assertOk()->assertSee('data-cart-unavailable="'.$a->product_id.'"', false);
         $this->get('/boutiques/alpha/produits')->assertOk()->assertSee('data-cart-unavailable="'.$a->product_id.'"', false);
-        \Illuminate\Support\Facades\DB::enableQueryLog();
-        \Illuminate\Support\Facades\DB::flushQueryLog();
+        DB::enableQueryLog();
+        DB::flushQueryLog();
         $this->get('/produits')->assertOk();
-        $one = count(\Illuminate\Support\Facades\DB::getQueryLog());
-        for ($i = 0; $i < 5; $i++) { $this->createShop('extra-'.$i); }
-        \Illuminate\Support\Facades\DB::flushQueryLog();
+        $one = count(DB::getQueryLog());
+        for ($i = 0; $i < 5; $i++) {
+            $this->createShop('extra-'.$i);
+        }
+        DB::flushQueryLog();
         $this->get('/produits')->assertOk();
-        $this->assertSame($one, count(\Illuminate\Support\Facades\DB::getQueryLog()));
-        \Illuminate\Support\Facades\DB::disableQueryLog();
+        $this->assertSame($one, count(DB::getQueryLog()));
+        DB::disableQueryLog();
     }
 
     public function test_badge_counts_products_and_identifies_the_original_store(): void
@@ -629,7 +649,7 @@ class PublicCartTest extends TestCase
     {
         $a = $this->createShop('alpha');
         $this->postJson('/shops/alpha/cart/items', ['product_variant_id' => $a->id, 'quantity' => 2])->assertOk();
-        $buyer = \App\Models\User::factory()->create([
+        $buyer = User::factory()->create([
             'store_id' => null, 'is_buyer' => true, 'password' => 'CartBuyerTest123!',
         ]);
         $this->post('/client/connexion', ['email' => $buyer->email, 'password' => 'CartBuyerTest123!'])
@@ -656,19 +676,21 @@ class PublicCartTest extends TestCase
             ->assertJsonPath('data.items', [])->assertJsonPath('data.totals.total', '0.00');
         $this->assertNull(session('zemboa.cart'));
         $this->assertSame($stock, $a->stockLevel()->firstOrFail()->getRawOriginal());
-        foreach (['stock_reservations', 'orders', 'payments'] as $table) { $this->assertDatabaseCount($table, 0); }
+        foreach (['stock_reservations', 'orders', 'payments'] as $table) {
+            $this->assertDatabaseCount($table, 0);
+        }
     }
 
     public function test_public_variant_labels_use_real_attribute_names_and_values(): void
     {
         $a = $this->createShop('alpha');
-        $attribute = \App\Models\Attribute::create(['name' => 'Taille', 'slug' => 'taille', 'status' => 'ACTIVE']);
-        $value = \App\Models\AttributeValue::create(['attribute_id' => $attribute->id, 'value' => 'M']);
-        app(\App\Actions\ProductVariant\AttachAttributeValue::class)->execute($a->id, $value->id);
-        \App\Models\ProductImage::create(['product_id' => $a->product_id, 'path' => 'catalog/memory-test.jpg', 'is_primary' => true, 'position' => 0]);
+        $attribute = Attribute::create(['name' => 'Taille', 'slug' => 'taille', 'status' => 'ACTIVE']);
+        $value = AttributeValue::create(['attribute_id' => $attribute->id, 'value' => 'M']);
+        app(AttachAttributeValue::class)->execute($a->id, $value->id);
+        ProductImage::create(['product_id' => $a->product_id, 'path' => 'catalog/memory-test.jpg', 'is_primary' => true, 'position' => 0]);
         $this->postJson('/shops/alpha/cart/items', ['product_variant_id' => $a->id, 'quantity' => 1])->assertOk()
             ->assertJsonPath('data.details.0.variant_label', 'Taille: M')
-            ->assertJsonPath('data.details.0.image_url', \Illuminate\Support\Facades\Storage::disk('public')->url('catalog/memory-test.jpg'))
+            ->assertJsonPath('data.details.0.image_url', Storage::disk('public')->url('catalog/memory-test.jpg'))
             ->assertJsonPath('data.details.0.product_url', route('marketplace.products.show', ['shopSlug' => 'alpha', 'product' => $a->product_id]));
         $this->get('/boutiques/alpha/produits/'.$a->product_id)->assertOk()->assertSee('Taille: M');
         $this->get('/boutiques/alpha/produits')->assertOk()->assertSee('Taille: M');
@@ -750,12 +772,16 @@ class PublicCartTest extends TestCase
         $this->assertSame($b->store_id, session('zemboa.cart.store_id'));
         app(TenantContext::class)->setFromStore(Store::findOrFail($a->store_id));
         $this->assertSame($stock, $a->stockLevel()->firstOrFail()->getRawOriginal());
-        foreach (['orders', 'payments', 'stock_reservations'] as $table) $this->assertDatabaseCount($table, 0);
+        foreach (['orders', 'payments', 'stock_reservations'] as $table) {
+            $this->assertDatabaseCount($table, 0);
+        }
     }
 
     public function test_switch_rejects_changed_cart_forged_token_and_wrong_destination(): void
     {
-        $a = $this->createShop('alpha'); $this->createShop('beta'); $this->createShop('gamma');
+        $a = $this->createShop('alpha');
+        $this->createShop('beta');
+        $this->createShop('gamma');
         $this->postJson('/shops/alpha/cart/items', ['product_variant_id' => $a->id, 'quantity' => 1])->assertOk();
         $token = $this->getJson('/shops/beta/cart')->json('data.foreign_cart.confirmation_token');
         $this->withCredentials()->withCookie(config('session.cookie'), session()->getId());
@@ -776,7 +802,8 @@ class PublicCartTest extends TestCase
 
     public function test_switch_does_not_bypass_suspended_owner_or_destination(): void
     {
-        $a = $this->createShop('alpha'); $b = $this->createShop('beta');
+        $a = $this->createShop('alpha');
+        $b = $this->createShop('beta');
         $this->postJson('/shops/alpha/cart/items', ['product_variant_id' => $a->id, 'quantity' => 1])->assertOk();
         $token = $this->getJson('/shops/beta/cart')->json('data.foreign_cart.confirmation_token');
         $this->withCredentials()->withCookie(config('session.cookie'), session()->getId());
@@ -790,7 +817,8 @@ class PublicCartTest extends TestCase
 
     public function test_recreated_cart_and_different_session_cannot_replay_confirmation(): void
     {
-        $a = $this->createShop('alpha'); $this->createShop('beta');
+        $a = $this->createShop('alpha');
+        $this->createShop('beta');
         $this->postJson('/shops/alpha/cart/items', ['product_variant_id' => $a->id, 'quantity' => 1])->assertOk();
         $token = $this->getJson('/shops/beta/cart')->json('data.foreign_cart.confirmation_token');
         $this->withCredentials()->withCookie(config('session.cookie'), session()->getId());

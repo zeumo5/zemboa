@@ -1,35 +1,53 @@
 <?php
 
-use App\Http\Controllers\MarketplaceController;
-use App\Http\Controllers\GuestLocaleController;
-use App\Http\Controllers\UserLocaleController;
-use App\Http\Controllers\StoreDocumentSettingController;
-use App\Http\Controllers\PosClosingReportController;
-use App\Http\Controllers\PosCashMovementController;
-use App\Http\Controllers\PosSessionController;
-use App\Http\Controllers\PosRegisterController;
-use App\Http\Controllers\Admin\SendOwnerInvitationController;
-use App\Http\Controllers\OwnerInvitationController;
-use App\Http\Controllers\Admin\StoreController as AdminStoreController;
 use App\Http\Controllers\Admin\Auth\AdminSessionController;
+use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\SendOwnerInvitationController;
+use App\Http\Controllers\Admin\StoreController as AdminStoreController;
 use App\Http\Controllers\Auth\SessionController;
-use App\Http\Controllers\EmployeeInvitationController;
-use App\Http\Controllers\EmployeeController;
-use App\Http\Controllers\OrderController;
-use App\Http\Controllers\RefundController;
-use App\Http\Controllers\ReturnRequestController;
+use App\Http\Controllers\Buyer\AccountController;
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DeliveryController;
-use App\Http\Controllers\PublicCheckoutController;
+use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\EmployeeInvitationController;
+use App\Http\Controllers\GuestLocaleController;
+use App\Http\Controllers\MarketplaceController;
+use App\Http\Controllers\MobileMoneyReconciliationController;
+use App\Http\Controllers\OrderController;
+use App\Http\Controllers\OwnerInvitationController;
+use App\Http\Controllers\PosCashMovementController;
+use App\Http\Controllers\PosClosingReportController;
+use App\Http\Controllers\PosRegisterController;
+use App\Http\Controllers\PosSessionController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProductVariantController;
+use App\Http\Controllers\Professional\AfterSalesController;
+use App\Http\Controllers\Professional\CatalogController;
+use App\Http\Controllers\Professional\CatalogMediaController;
+use App\Http\Controllers\Professional\CategoryCatalogController;
+use App\Http\Controllers\Professional\CustomerHistoryController;
+use App\Http\Controllers\Professional\DeliveryAgentController;
+use App\Http\Controllers\Professional\InventoryController;
+use App\Http\Controllers\Professional\OrderManagementController;
+use App\Http\Controllers\Professional\PosController;
+use App\Http\Controllers\Professional\PromotionController;
+use App\Http\Controllers\Professional\StoreCustomizationController;
 use App\Http\Controllers\PublicCartController;
 use App\Http\Controllers\PublicCatalogController;
-use App\Http\Controllers\StoreSettingController;
-use App\Http\Controllers\MobileMoneyReconciliationController;
-use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\PublicCheckoutController;
+use App\Http\Controllers\RefundController;
+use App\Http\Controllers\ReturnRequestController;
 use App\Http\Controllers\StockController;
-use App\Http\Controllers\ProductVariantController;
-use App\Http\Controllers\ProductController;
+use App\Http\Controllers\StoreDocumentSettingController;
+use App\Http\Controllers\StoreSettingController;
+use App\Http\Controllers\UserLocaleController;
+use App\Http\Middleware\ApplyStoreLocale;
+use App\Http\Middleware\EnsureCatalogAccess;
+use App\Http\Middleware\EnsureProfessionalIdentity;
+use App\Http\Middleware\EnsureSalesAccess;
+use App\Http\Middleware\ProtectInvitationResponse;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\CategoryController;
 
 // Choix de langue des visiteurs non connectés.
 Route::post(
@@ -45,18 +63,22 @@ Route::middleware('auth')->patch(
 )->name('account.locale.update');
 
 Route::get('/', [MarketplaceController::class, 'index'])->name('marketplace.home');
+Route::get('/account', [SessionController::class, 'me'])->name('account.show');
 Route::get('/produits', [MarketplaceController::class, 'products'])->name('marketplace.products');
 Route::get('/boutiques', [MarketplaceController::class, 'stores'])->name('marketplace.stores');
 
 // Global buyer identity: same users provider, independent session guard, no tenant middleware.
 Route::prefix('client')->name('buyer.')->group(function () {
-    $controller = \App\Http\Controllers\Buyer\SessionController::class;
+    $controller = App\Http\Controllers\Buyer\SessionController::class;
     Route::get('/inscription', [$controller, 'registerForm'])->name('register');
     Route::post('/inscription', [$controller, 'register'])->middleware('throttle:buyer.register')->name('register.store');
     Route::get('/connexion', [$controller, 'loginForm'])->name('login');
     Route::post('/connexion', [$controller, 'login'])->middleware('throttle:buyer.login')->name('login.store');
     Route::middleware('buyer')->group(function () use ($controller) {
-        Route::get('/compte', [$controller, 'account'])->name('account');
+        Route::get('/compte', [AccountController::class, 'dashboard'])->name('account');
+        Route::get('/commandes', [AccountController::class, 'orders'])->name('orders');
+        Route::get('/commandes/{orderId}', [AccountController::class, 'show'])->whereNumber('orderId')->name('orders.show');
+        Route::get('/profil', [AccountController::class, 'profile'])->name('profile');
         Route::post('/deconnexion', [$controller, 'logout'])->name('logout');
     });
 });
@@ -108,12 +130,12 @@ Route::prefix('admin')
             ->middleware('auth')
             ->name('logout');
 
-        Route::middleware(['auth', 'admin'])
+        Route::middleware(['auth:web', 'admin'])
             ->group(function () {
 
                 Route::get(
                     '/',
-                    [AdminSessionController::class, 'dashboard']
+                    DashboardController::class
                 )->name('dashboard');
 
                 // Gestion des boutiques par le super administrateur.
@@ -122,6 +144,8 @@ Route::prefix('admin')
                     '/stores',
                     [AdminStoreController::class, 'index']
                 )->name('stores.index');
+
+                Route::get('/stores/create', [AdminStoreController::class, 'create'])->name('stores.create');
 
                 Route::post(
                     '/stores',
@@ -165,12 +189,87 @@ Route::prefix('admin')
             });
     });
 
-Route::middleware(['auth', 'tenant'])->group(function () {
+Route::middleware(['auth:web', 'tenant', EnsureProfessionalIdentity::class])->group(function () {
+    Route::prefix('espace-professionnel/boutique')->name('professional.customization.')->middleware('auth:web')->group(function () {
+        $customization = StoreCustomizationController::class;
+        Route::get('/', [$customization, 'index'])->name('index');
+        Route::post('/brouillon', [$customization, 'save'])->middleware('throttle:30,1')->name('save');
+        Route::post('/publier', [$customization, 'publish'])->middleware('throttle:10,1')->name('publish');
+        Route::post('/abandonner', [$customization, 'discard'])->name('discard');
+        Route::get('/apercu', [$customization, 'preview'])->name('preview');
+        Route::get('/medias/{slot}', [$customization, 'media'])->whereIn('slot', ['logo', 'banner'])->name('media');
+    });
 
-    Route::get(
-        '/account',
-        [SessionController::class, 'me']
-    )->name('account.show');
+    Route::prefix('espace-livreur')->name('courier.')->middleware('auth:web')->group(function () {
+        $courier = DeliveryAgentController::class;
+        Route::get('/', [$courier, 'index'])->name('index');
+        Route::get('/historique', [$courier, 'index'])->name('history');
+        Route::get('/missions/{deliveryId}', [$courier, 'show'])->whereNumber('deliveryId')->name('show');
+        Route::post('/missions/{deliveryId}/statut', [$courier, 'update'])->whereNumber('deliveryId')->middleware('throttle:20,1')->name('update');
+    });
+
+    Route::prefix('espace-professionnel/caisse')->name('pos.interface.')->middleware('auth:web')->group(function () {
+        $pos = PosController::class;
+        Route::get('/', [$pos, 'index'])->name('index');
+        Route::post('/panier', [$pos, 'cart'])->name('cart');
+        Route::post('/ventes', [$pos, 'store'])->middleware('throttle:20,1')->name('store');
+        Route::get('/ventes', [$pos, 'history'])->name('history');
+        Route::get('/ventes/{orderId}', [$pos, 'show'])->whereNumber('orderId')->name('show');
+        Route::post('/ventes/{orderId}/encaisser', [$pos, 'collect'])->whereNumber('orderId')->middleware('throttle:20,1')->name('collect');
+        Route::get('/ventes/{orderId}/document', [$pos, 'document'])->whereNumber('orderId')->name('document');
+    });
+
+    Route::get('/espace-professionnel', App\Http\Controllers\Professional\DashboardController::class)
+        ->middleware('auth:web')->name('professional.dashboard');
+
+    Route::prefix('espace-professionnel')->name('professional.')->middleware(['auth:web', EnsureSalesAccess::class])->group(function () {
+        Route::get('/commandes', [OrderManagementController::class, 'index'])->name('orders.index');
+        Route::get('/commandes/{order}', [OrderManagementController::class, 'show'])->whereNumber('order')->name('orders.show');
+        Route::post('/commandes/{order}/preparation/{step}', [OrderManagementController::class, 'prepare'])->whereNumber('order')->whereIn('step', ['start', 'ready'])->name('orders.prepare');
+        Route::get('/clients', [CustomerHistoryController::class, 'index'])->name('customers.index');
+        Route::get('/clients/{source}/{identity}', [CustomerHistoryController::class, 'show'])->whereIn('source', ['local', 'buyer', 'guest'])->whereNumber('identity')->name('customers.show');
+        Route::get('/retours', [AfterSalesController::class, 'index'])->name('returns.index');
+        Route::get('/retours/creer/{order}', [AfterSalesController::class, 'create'])->whereNumber('order')->name('returns.create');
+        Route::post('/retours/creer/{order}', [AfterSalesController::class, 'store'])->whereNumber('order')->name('returns.store');
+        Route::get('/retours/{case}', [AfterSalesController::class, 'show'])->whereNumber('case')->name('returns.show');
+        Route::post('/retours/{case}/{operation}', [AfterSalesController::class, 'update'])->whereNumber('case')->whereIn('operation', ['review', 'receive', 'inspect', 'restock'])->name('returns.update');
+        Route::post('/retours/{case}/remboursement/{operation}', [AfterSalesController::class, 'refund'])->whereNumber('case')->whereIn('operation', ['prepare', 'approve', 'simulate'])->name('returns.refund');
+    });
+
+    Route::prefix('espace-professionnel')->name('professional.')->middleware(['auth:web', EnsureCatalogAccess::class])->group(function () {
+        Route::get('/promotions', [PromotionController::class, 'index'])->name('promotions.index');
+        Route::get('/promotions/{productVariant}', [PromotionController::class, 'index'])->whereNumber('productVariant')->name('promotions.edit');
+        Route::put('/promotions/{productVariant}', [PromotionController::class, 'update'])->whereNumber('productVariant')->name('promotions.update');
+        Route::delete('/promotions/{productVariant}', [PromotionController::class, 'destroy'])->whereNumber('productVariant')->name('promotions.destroy');
+        Route::put('/produits/{product}/vedette', [PromotionController::class, 'featured'])->whereNumber('product')->name('promotions.featured');
+        $catalog = CatalogController::class;
+        $inventory = InventoryController::class;
+        Route::get('/stock', [$inventory, 'index'])->name('inventory.index');
+        Route::get('/stock/reception', [$inventory, 'form'])->name('inventory.receive');
+        Route::get('/stock/ajustement', [$inventory, 'form'])->name('inventory.adjust');
+        Route::post('/stock/operations/{operation}', [$inventory, 'submit'])->whereIn('operation', ['receive', 'adjust-in', 'adjust-out'])->name('inventory.submit');
+        Route::get('/stock/historique', [$inventory, 'movements'])->name('inventory.movements');
+        Route::get('/stock/reservations', [$inventory, 'reservations'])->name('inventory.reservations');
+        Route::get('/stock/reservations/{reservation}', [$inventory, 'reservation'])->whereNumber('reservation')->name('inventory.reservation');
+        Route::get('/stock/{stockLevel}', [$inventory, 'show'])->whereNumber('stockLevel')->name('inventory.show');
+        Route::get('/produits', [$catalog, 'index'])->name('products.index');
+        Route::get('/produits/ajouter', [$catalog, 'create'])->name('products.create');
+        Route::post('/produits', [$catalog, 'store'])->name('products.store');
+        Route::get('/produits/{product}/modifier', [$catalog, 'edit'])->whereNumber('product')->name('products.edit');
+        Route::put('/produits/{product}', [$catalog, 'update'])->whereNumber('product')->name('products.update');
+        Route::post('/produits/{product}/variantes', [$catalog, 'storeVariant'])->whereNumber('product')->name('variants.store');
+        Route::put('/variantes/{productVariant}', [$catalog, 'updateVariant'])->whereNumber('productVariant')->name('variants.update');
+        $categories = CategoryCatalogController::class;
+        Route::get('/categories', [$categories, 'index'])->name('categories.index');
+        Route::get('/categories/ajouter', [$categories, 'create'])->name('categories.create');
+        Route::post('/categories', [$categories, 'store'])->name('categories.store');
+        Route::get('/categories/{category}/modifier', [$categories, 'edit'])->whereNumber('category')->name('categories.edit');
+        Route::put('/categories/{category}', [$categories, 'update'])->whereNumber('category')->name('categories.update');
+        Route::delete('/categories/{category}', [$categories, 'destroy'])->whereNumber('category')->name('categories.destroy');
+        $media = CatalogMediaController::class;
+        Route::post('/produits/{product}/images', [$media, 'store'])->whereNumber('product')->middleware('throttle:20,1')->name('images.store');
+        Route::put('/images/{image}', [$media, 'update'])->whereNumber('image')->name('images.update');
+    });
 
     Route::get('/categories', [CategoryController::class, 'index'])
         ->name('categories.index');
@@ -224,7 +323,6 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         [StockController::class, 'movements']
     )->name('stock.movements');
 
-
     Route::get('/stock/{stockLevel}', [StockController::class, 'show'])
         ->name('stock.show');
 
@@ -256,7 +354,6 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         [MobileMoneyReconciliationController::class, 'index']
     )->name('payments.reconciliations.index');
 
-
     // Consulter les détails d'un dossier
     // de réconciliation de sa boutique.
     Route::get(
@@ -272,7 +369,6 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         [MobileMoneyReconciliationController::class, 'resolve']
     )->whereNumber('caseId')
         ->name('payments.reconciliations.resolve');
-
 
     // Paramètres de la boutique courante
 
@@ -300,7 +396,6 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     )
         ->whereNumber('orderId')
         ->name('orders.show');
-
 
     /*
     |--------------------------------------------------------------------------
@@ -396,7 +491,6 @@ Route::middleware(['auth', 'tenant'])->group(function () {
         ->whereNumber('returnRequestId')
         ->name('returns.inspect');
 
-
     // Remettre en stock les articles revendables.
     Route::patch(
         '/returns/{returnRequestId}/restock',
@@ -446,6 +540,11 @@ Route::middleware(['auth', 'tenant'])->group(function () {
 
     // Gestion des employés — propriétaire uniquement.
 
+    Route::post('/employees/{employeeId}/invitation', [EmployeeController::class, 'resend'])
+        ->whereNumber('employeeId')->middleware('throttle:3,1')->name('employees.invitation.resend');
+    Route::delete('/employees/{employeeId}/invitation', [EmployeeController::class, 'revoke'])
+        ->whereNumber('employeeId')->name('employees.invitation.revoke');
+
     Route::get(
         '/employees',
         [EmployeeController::class, 'index']
@@ -454,7 +553,7 @@ Route::middleware(['auth', 'tenant'])->group(function () {
     Route::post(
         '/employees',
         [EmployeeController::class, 'store']
-    )->name('employees.store');
+    )->middleware('throttle:10,1')->name('employees.store');
 
     Route::patch(
         '/employees/{employeeId}/role',
@@ -565,13 +664,13 @@ Route::middleware(['auth', 'tenant'])->group(function () {
 Route::get(
     '/employee-invitations/{token}',
     [EmployeeInvitationController::class, 'show']
-)->name('employee.invitation.form');
+)->middleware(ProtectInvitationResponse::class)->name('employee.invitation.form');
 
 Route::post(
     '/employee-invitations/{token}',
     [EmployeeInvitationController::class, 'accept']
 )
-    ->middleware('throttle:6,1')
+    ->middleware(['throttle:6,1', ProtectInvitationResponse::class])
     ->name('employee.invitation.accept');
 
 // Invitation des propriétaires de boutiques.
@@ -579,15 +678,14 @@ Route::post(
 Route::get(
     '/owner-invitations/{token}',
     [OwnerInvitationController::class, 'show']
-)->name('owner.invitation.form');
+)->middleware(ProtectInvitationResponse::class)->name('owner.invitation.form');
 
 Route::post(
     '/owner-invitations/{token}',
     [OwnerInvitationController::class, 'accept']
 )
-    ->middleware('throttle:6,1')
+    ->middleware(['throttle:6,1', ProtectInvitationResponse::class])
     ->name('owner.invitation.accept');
-
 
 /*
 |--------------------------------------------------------------------------
@@ -600,7 +698,7 @@ Route::post(
 Route::prefix('shops/{shopSlug}')
     ->middleware([
         'public.tenant',
-        \App\Http\Middleware\ApplyStoreLocale::class,
+        ApplyStoreLocale::class,
     ])
     ->name('public.shops.')
     ->group(function () {
@@ -669,7 +767,6 @@ Route::prefix('shops/{shopSlug}')
         Route::get('/checkout', [PublicCheckoutController::class, 'show'])->name('checkout.show');
     });
 
-
 /*
 |--------------------------------------------------------------------------
 | Pages publiques HTML de la marketplace (API JSON /shops/ conservees)
@@ -678,7 +775,7 @@ Route::prefix('shops/{shopSlug}')
 Route::prefix('boutiques/{shopSlug}')
     ->middleware([
         'public.tenant',
-        \App\Http\Middleware\ApplyStoreLocale::class,
+        ApplyStoreLocale::class,
     ])
     ->name('marketplace.')
     ->group(function () {

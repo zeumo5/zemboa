@@ -2,8 +2,7 @@
 @section('title', __('marketplace.storefront.categories_title'))
 @section('content')
 @php
-  $categoryBanner = $settings?->banner_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($settings->banner_path)
-      ? \Illuminate\Support\Facades\Storage::disk('public')->url($settings->banner_path) : null;
+  $categoryBanner = \App\Support\StoreBranding::url($settings,'banner');
 @endphp
 <section class="merchant-section premium-categories">
   <header class="categories-hero @if($categoryBanner) categories-hero-with-image @endif">

@@ -1,17 +1,18 @@
 <?php
+
 namespace Tests\Feature;
 
-use App\Models\Store;
+use App\Actions\Payments\ConfirmPayment;
+use App\Actions\Payments\CreateCashPayment;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Payment;
-use App\Support\TenantContext;
-use App\Actions\Payments\CreateCashPayment;
-use App\Actions\Payments\ConfirmPayment;
-use Illuminate\Auth\Access\AuthorizationException;
 use App\Models\Role;
+use App\Models\Store;
 use App\Models\User;
+use App\Support\TenantContext;
 use Database\Seeders\DatabaseSeeder;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use RuntimeException;
 use Tests\TestCase;
@@ -53,6 +54,10 @@ class CashierRbacAuditTest extends TestCase
             'orders.view',
             'payments.confirm',
             'payments.view',
+            'pos.registers.view',
+            'pos.sales.create',
+            'pos.sessions.close',
+            'pos.sessions.open',
         ];
 
         $this->assertSame($expected, $actual);
@@ -109,113 +114,112 @@ class CashierRbacAuditTest extends TestCase
         );
     }
 
-private function prepareMixedRoleCashier(): array
-{
-    $this->seed(DatabaseSeeder::class);
+    private function prepareMixedRoleCashier(): array
+    {
+        $this->seed(DatabaseSeeder::class);
 
-    $store = Store::create([
-        'name' => 'Boutique Audit Caisse',
-        'slug' => 'audit-caisse',
-        'status' => 'ACTIVE',
-    ]);
+        $store = Store::create([
+            'name' => 'Boutique Audit Caisse',
+            'slug' => 'audit-caisse',
+            'status' => 'ACTIVE',
+        ]);
 
-    $user = User::factory()->create([
-        'store_id' => $store->id,
-        'status' => 'ACTIVE',
-    ]);
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+            'status' => 'ACTIVE',
+        ]);
 
-    // Cas sensible : deux rôles attribués au même utilisateur.
-    $roleIds = Role::query()
-        ->whereIn('code', ['CASHIER', 'DELIVERY_AGENT'])
-        ->pluck('id')
-        ->all();
+        // Cas sensible : deux rôles attribués au même utilisateur.
+        $roleIds = Role::query()
+            ->whereIn('code', ['CASHIER', 'DELIVERY_AGENT'])
+            ->pluck('id')
+            ->all();
 
-    $user->roles()->attach($roleIds);
+        $user->roles()->attach($roleIds);
 
-    $this->actingAs($user);
+        $this->actingAs($user);
 
-    app(TenantContext::class)->setFromUser($user);
+        app(TenantContext::class)->setFromUser($user);
 
-    $customer = Customer::create([
-        'name' => 'Client Audit',
-        'phone' => '+237690000001',
-    ]);
+        $customer = Customer::create([
+            'name' => 'Client Audit',
+            'phone' => '+237690000001',
+        ]);
 
-    $order = Order::create([
-        'customer_id' => $customer->id,
-        'order_number' => 'ZM-AUDIT-CASH-001',
-        'fulfillment_type' => 'PICKUP',
-        'customer_name' => 'Client Audit',
-        'customer_phone' => '+237690000001',
-        'subtotal' => '5000.00',
-        'total' => '5000.00',
-    ]);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'order_number' => 'ZM-AUDIT-CASH-001',
+            'fulfillment_type' => 'PICKUP',
+            'customer_name' => 'Client Audit',
+            'customer_phone' => '+237690000001',
+            'subtotal' => '5000.00',
+            'total' => '5000.00',
+        ]);
 
-    $this->assertTrue($user->hasRole('CASHIER'));
-    $this->assertTrue($user->hasRole('DELIVERY_AGENT'));
-    $this->assertTrue(
-        $user->hasPermission('payments.confirm')
-    );
-
-    return [$user, $order];
-}
-
-public function test_delivery_agent_with_cashier_role_cannot_create_cash_payment(): void
-{
-    [$user, $order] = $this->prepareMixedRoleCashier();
-
-    try {
-        app(CreateCashPayment::class)->execute(
-            orderId: $order->id,
-            amount: '5000.00',
-            cashReceived: '5000.00'
+        $this->assertTrue($user->hasRole('CASHIER'));
+        $this->assertTrue($user->hasRole('DELIVERY_AGENT'));
+        $this->assertTrue(
+            $user->hasPermission('payments.confirm')
         );
 
-        $this->fail(
-            'Un livreur ne doit pas enregistrer un paiement CASH.'
-        );
-    } catch (AuthorizationException $exception) {
-        // Refus attendu.
+        return [$user, $order];
     }
 
-    $this->assertDatabaseMissing('payments', [
-        'order_id' => $order->id,
-        'method' => 'CASH',
-    ]);
-}
+    public function test_delivery_agent_with_cashier_role_cannot_create_cash_payment(): void
+    {
+        [$user, $order] = $this->prepareMixedRoleCashier();
 
-public function test_delivery_agent_with_cashier_role_cannot_confirm_cash_payment(): void
-{
-    [$user, $order] = $this->prepareMixedRoleCashier();
+        try {
+            app(CreateCashPayment::class)->execute(
+                orderId: $order->id,
+                amount: '5000.00',
+                cashReceived: '5000.00'
+            );
 
-    $payment = Payment::create([
-        'order_id' => $order->id,
-        'amount' => '5000.00',
-        'method' => 'CASH',
-        'status' => 'PENDING',
-        'cash_received' => '5000.00',
-        'change_given' => '0.00',
-    ]);
+            $this->fail(
+                'Un livreur ne doit pas enregistrer un paiement CASH.'
+            );
+        } catch (AuthorizationException $exception) {
+            // Refus attendu.
+        }
 
-    try {
-        app(ConfirmPayment::class)->execute(
-            paymentId: $payment->id,
-            userId: $user->id
-        );
-
-        $this->fail(
-            'Un livreur ne doit pas confirmer un paiement CASH.'
-        );
-    } catch (AuthorizationException $exception) {
-        // Refus attendu.
+        $this->assertDatabaseMissing('payments', [
+            'order_id' => $order->id,
+            'method' => 'CASH',
+        ]);
     }
 
-    $payment->refresh();
-    $order->refresh();
+    public function test_delivery_agent_with_cashier_role_cannot_confirm_cash_payment(): void
+    {
+        [$user, $order] = $this->prepareMixedRoleCashier();
 
-    $this->assertSame('PENDING', $payment->status);
-    $this->assertNull($payment->confirmed_at);
-    $this->assertSame('UNPAID', $order->payment_status);
-}
+        $payment = Payment::create([
+            'order_id' => $order->id,
+            'amount' => '5000.00',
+            'method' => 'CASH',
+            'status' => 'PENDING',
+            'cash_received' => '5000.00',
+            'change_given' => '0.00',
+        ]);
 
+        try {
+            app(ConfirmPayment::class)->execute(
+                paymentId: $payment->id,
+                userId: $user->id
+            );
+
+            $this->fail(
+                'Un livreur ne doit pas confirmer un paiement CASH.'
+            );
+        } catch (AuthorizationException $exception) {
+            // Refus attendu.
+        }
+
+        $payment->refresh();
+        $order->refresh();
+
+        $this->assertSame('PENDING', $payment->status);
+        $this->assertNull($payment->confirmed_at);
+        $this->assertSame('UNPAID', $order->payment_status);
+    }
 }

@@ -1,6 +1,6 @@
 <?php
-namespace App\Models;
 
+namespace App\Models;
 
 use App\Models\Concerns\BelongsToStore;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -37,6 +37,7 @@ class StoreSetting extends Model
     protected function casts(): array
     {
         return [
+            'commercial_configured' => 'boolean',
             'allow_reservations' => 'boolean',
             'reservation_duration_minutes' => 'integer',
 
@@ -55,5 +56,10 @@ class StoreSetting extends Model
             'notify_new_orders' => 'boolean',
             'notify_low_stock' => 'boolean',
         ];
+    }
+
+    public function hasCommercialConfiguration(): bool
+    {
+        return $this->commercial_configured === true;
     }
 }

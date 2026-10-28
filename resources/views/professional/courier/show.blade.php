@@ -1,0 +1,21 @@
+@extends('professional.courier.layout')
+@section('title',$order->order_number)
+@section('content')
+<a class="courier-back" href="{{ route('courier.index') }}">← {{ __('courier.back') }}</a>
+<div class="courier-detail-heading"><h1>{{ $order->order_number }}</h1><span class="courier-badge courier-{{ strtolower($delivery->status) }}">{{ __('courier.status.'.$delivery->status) }}</span></div>
+<div class="courier-detail-grid"><div class="courier-detail-main">
+<section class="courier-panel"><h2>{{ __('courier.origin') }}</h2><h3>{{ $store->name }}</h3><p>{{ $store->address ?: __('courier.unavailable') }}</p></section>
+<section class="courier-panel"><h2>{{ __('courier.recipient') }}</h2><h3>{{ $order->customer_name ?: __('courier.unavailable') }}</h3>
+@if($order->customer_phone)<p>{{ $order->customer_phone }}</p>@php($safePhone=\App\Support\BuyerIdentity::phoneOrNull($order->customer_phone))@if($safePhone)<a class="courier-button courier-outline" href="tel:{{ $safePhone }}">{{ __('courier.call') }}</a>@endif @endif
+<hr><h3>{{ __('courier.destination') }}</h3><p>{{ $order->delivery_city }} {{ $order->delivery_area }}<br>{{ $order->delivery_address ?: __('courier.unavailable') }}</p>@if($order->delivery_instructions)<h3>{{ __('courier.instructions') }}</h3><p class="courier-prewrap">{{ $order->delivery_instructions }}</p>@endif<p class="courier-muted">{{ __('courier.no_location') }}</p></section>
+<section class="courier-panel"><h2>{{ __('courier.articles') }}</h2>@foreach($order->items as $item)<div class="courier-item"><div><strong>{{ $item->product_name }}</strong>@if($item->variant_description)<small>{{ $item->variant_description }}</small>@endif</div><span>{{ __('courier.units') }} : <strong>{{ $item->quantity }}</strong></span></div>@endforeach</section>
+</div><div class="courier-detail-side"><section class="courier-panel courier-actions"><h2>{{ __('courier.overview') }}</h2><p class="courier-notice">{{ __('courier.no_cash') }}</p>
+@if($order->status==='PENDING' && in_array($delivery->status,['ASSIGNED','PICKED_UP'],true) && $actor->hasPermission('deliveries.update'))
+@if($delivery->status==='ASSIGNED' || $order->payment_status==='PAID')
+<form method="post" action="{{ route('courier.update',$delivery->id) }}" data-courier-transition data-working="{{ __('courier.working') }}">@csrf<input type="hidden" name="status" value="{{ $delivery->status==='ASSIGNED'?'PICKED_UP':'DELIVERED' }}">@if($delivery->status==='PICKED_UP')<p>{{ __('courier.payment_ok') }}</p>@endif<label class="courier-check"><input type="checkbox" name="confirmed" value="1" required><span>{{ __('courier.confirm') }}</span></label><button class="courier-button" type="submit">{{ $delivery->status==='ASSIGNED'?__('courier.pickup'):__('courier.deliver') }}</button></form>
+@else<p class="courier-warning" role="status">{{ __('courier.payment_wait') }}</p>@endif
+<details class="courier-failure"><summary>{{ __('courier.report') }}</summary><form method="post" action="{{ route('courier.update',$delivery->id) }}" data-courier-transition data-working="{{ __('courier.working') }}">@csrf<input type="hidden" name="status" value="FAILED"><label for="failure-reason">{{ __('courier.reason') }}</label><textarea id="failure-reason" name="failure_reason" maxlength="1000" required>{{ old('failure_reason') }}</textarea><label class="courier-check"><input type="checkbox" name="confirmed" value="1" required><span>{{ __('courier.confirm') }}</span></label><button type="submit" class="courier-button courier-danger">{{ __('courier.report') }}</button></form></details>
+@elseif($order->status!=='PENDING')<p>{{ __('courier.blocked') }}</p>@endif
+@if($delivery->failure_reason)<h3>{{ __('courier.reason') }}</h3><p class="courier-prewrap">{{ $delivery->failure_reason }}</p>@endif
+</section><section class="courier-panel"><h2>{{ __('courier.timeline') }}</h2><ol class="courier-timeline">@foreach(['assigned_at'=>'attributed','picked_up_at'=>'picked_up','delivered_at'=>'delivered','failed_at'=>'failed','returned_at'=>'returned'] as $field=>$label)@if($delivery->$field)<li><strong>{{ __('courier.'.$label) }}</strong><time datetime="{{ $delivery->$field->toIso8601String() }}">{{ $delivery->$field->format('d/m/Y H:i') }}</time></li>@endif @endforeach</ol><p class="courier-muted">{{ __('courier.trace_note') }}</p></section></div></div>
+@endsection

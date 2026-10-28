@@ -1,0 +1,6 @@
+<article class="customer-order-card">
+  <header><strong>{{ $order->order_number }}</strong>@include('buyer.order-status')</header>
+  <div class="customer-order-body"><div class="customer-store"><span class="customer-store-mark" aria-hidden="true">{{ mb_strtoupper(mb_substr($order->store?->name ?? '—', 0, 1)) }}</span><div><strong>{{ $order->store?->name ?? __('customer.store_unavailable') }}</strong><small>{{ $order->created_at?->format('d/m/Y H:i') }}</small></div></div>
+  <dl class="customer-order-facts"><div><dt>{{ __('customer.items') }}</dt><dd>{{ trans_choice('customer.units', (int) $order->units, ['count' => (int) $order->units]) }}</dd></div><div><dt>{{ __('customer.reception') }}</dt><dd>{{ $order->fulfillment_type === 'PICKUP' ? __('customer.pickup') : ($order->fulfillment_type === 'DELIVERY' ? __('customer.delivery') : $order->fulfillment_type) }}</dd></div><div><dt>{{ __('customer.amount') }}</dt><dd>{{ number_format((float) $order->total, 0, ',', ' ') }} FCFA</dd></div></dl>
+  <footer>@if($order->payment_status === 'UNPAID')<small>{{ __('customer.unpaid') }}</small>@endif<a class="customer-button" href="{{ route('buyer.orders.show', ['orderId' => $order->id]) }}">{{ __('customer.details') }} <span aria-hidden="true">→</span></a></footer></div>
+</article>

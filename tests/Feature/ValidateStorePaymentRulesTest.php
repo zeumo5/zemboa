@@ -1,6 +1,6 @@
 <?php
-namespace Tests\Feature;
 
+namespace Tests\Feature;
 
 use App\Actions\Payments\ValidateStorePaymentRules;
 use App\Models\Customer;
@@ -55,7 +55,7 @@ class ValidateStorePaymentRulesTest extends TestCase
 
         $order = Order::create([
             'customer_id' => $customer->id,
-            'order_number' => 'ZM-PAY-' . $store->id,
+            'order_number' => 'ZM-PAY-'.$store->id,
             'status' => 'PENDING',
             'payment_status' => 'UNPAID',
             'fulfillment_type' => 'PICKUP',
@@ -100,17 +100,16 @@ class ValidateStorePaymentRulesTest extends TestCase
         }
     }
 
-    public function test_store_without_settings_keeps_existing_behavior(): void
+    public function test_store_without_settings_does_not_implicitly_allow_partial_payments(): void
     {
         [$order] = $this->prepareOrder();
 
-        $result = $this->validatePayment(
+        $this->assertAmountRejected(
             $order,
             '0.00',
             '2000.00'
         );
 
-        $this->assertSame(200000, $result);
     }
 
     public function test_full_payment_is_allowed_when_partial_disabled(): void

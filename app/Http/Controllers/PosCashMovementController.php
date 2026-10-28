@@ -2,67 +2,23 @@
 
 namespace App\Http\Controllers;
 
-
+use App\Actions\Pos\RecordPosCashMovement;
 use App\Models\PosCashMovement;
 use App\Models\PosSession;
-use App\Support\TenantContext;
-use Illuminate\Auth\Access\AuthorizationException;
-use App\Actions\Pos\RecordPosCashMovement;
 use App\Models\User;
+use App\Support\PosAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 final class PosCashMovementController extends Controller
 {
-
     public function index(
         Request $request,
         int $sessionId
     ): JsonResponse {
-        $actor = $request->user();
-        $storeId = app(TenantContext::class)->storeId();
-
-        if (! $actor instanceof User) {
-            abort(401, 'Authentification requise.');
-        }
-
-        // Consultation réservée aux responsables POS.
-        $supervisor = $actor->roles()
-            ->whereIn('code', [
-                'STORE_OWNER',
-                'STORE_MANAGER',
-            ])
-            ->exists();
-
-        // Refuser les comptes combinant des rôles interdits.
-        $forbiddenRole = $actor->roles()
-            ->whereIn('code', [
-                'DELIVERY_AGENT',
-                'SUPER_ADMIN',
-            ])
-            ->exists();
-
-        if (
-            $storeId === null ||
-            (int) $actor->store_id !== (int) $storeId ||
-            $actor->status !== 'ACTIVE' ||
-            ! $supervisor ||
-            $forbiddenRole ||
-            ! $actor->hasPermission(
-                'pos.cash_movements.manage'
-            )
-        ) {
-            throw new AuthorizationException(
-                'Consultation des mouvements POS non autorisée.'
-            );
-        }
-
-        if ($actor->store()->value('status') !== 'ACTIVE') {
-            throw new AuthorizationException(
-                'Cette boutique est suspendue.'
-            );
-        }
+        $actor = PosAccess::authorizeCashMovements($request->user('web'));
+        $storeId = (int) $actor->store_id;
 
         // La session doit appartenir à la boutique active.
         $session = PosSession::query()
@@ -101,8 +57,7 @@ final class PosCashMovementController extends Controller
                             'id' => $movement->recorded_by_user_id,
                             'name' => $movement->recordedBy?->name,
                         ],
-                        'created_at' =>
-                        $movement->created_at?->toIso8601String(),
+                        'created_at' => $movement->created_at?->toIso8601String(),
                     ];
                 }
             );
@@ -120,7 +75,7 @@ final class PosCashMovementController extends Controller
         int $sessionId,
         RecordPosCashMovement $recorder
     ): JsonResponse {
-        $actor = $request->user();
+        $actor = PosAccess::authorizeCashMovements($request->user('web'));
 
         if (! $actor instanceof User) {
             abort(401, 'Authentification requise.');

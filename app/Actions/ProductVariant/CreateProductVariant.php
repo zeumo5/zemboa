@@ -2,13 +2,12 @@
 
 namespace App\Actions\ProductVariant;
 
-
-use App\Models\StoreSetting;
-use App\Models\StockLevel;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Carbon;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\StockLevel;
+use App\Models\StoreSetting;
+use App\Support\CatalogPricing;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class CreateProductVariant
@@ -24,87 +23,45 @@ class CreateProductVariant
             ]);
         }
 
-        if ($data['price'] < 0) {
-    throw ValidationException::withMessages([
-        'price' => 'Le prix normal ne peut pas être négatif.',
-    ]);
-}
+        CatalogPricing::validate($data);
+        $data = CatalogPricing::normalizeDates($data);
 
-if (
-    isset($data['promo_price'])
-    && $data['promo_price'] !== null
-    && $data['promo_price'] < 0
-) {
-    throw ValidationException::withMessages([
-        'promo_price' =>
-            'Le prix promotionnel ne peut pas être négatif.',
-    ]);
-}
+        return DB::transaction(function () use ($data, $product) {
+            $hasVariants = ProductVariant::query()
+                ->where('product_id', $product->id)
+                ->exists();
 
-        if (
-    isset($data['promo_price'])
-    && $data['promo_price'] !== null
-    && $data['promo_price'] >= $data['price']
-) {
-    throw ValidationException::withMessages([
-        'promo_price' =>
-            'Le prix promotionnel doit être inférieur au prix normal.',
-    ]);
-}
+            // La première variante d'un produit devient automatiquement
+            // sa variante par défaut.
+            if (! $hasVariants) {
+                $data['is_default'] = true;
+            }
 
-if (
-    !empty($data['promo_starts_at'])
-    && !empty($data['promo_ends_at'])
-) {
-    $startsAt = Carbon::parse($data['promo_starts_at']);
-    $endsAt = Carbon::parse($data['promo_ends_at']);
+            // Si la nouvelle variante devient celle par défaut,
+            // les anciennes ne doivent plus l'être.
+            if ($data['is_default'] ?? false) {
+                ProductVariant::query()
+                    ->where('product_id', $product->id)
+                    ->where('is_default', true)
+                    ->update([
+                        'is_default' => false,
+                    ]);
+            }
 
-    if ($endsAt->lt($startsAt)) {
-        throw ValidationException::withMessages([
-            'promo_ends_at' =>
-                'La date de fin de la promotion doit être postérieure ou égale à la date de début.',
-        ]);
-    }
-}
+            $variant = ProductVariant::create($data);
 
-       return DB::transaction(function () use ($data, $product) {
-    $hasVariants = ProductVariant::query()
-        ->where('product_id', $product->id)
-        ->exists();
+            $lowStockThreshold = (int) (
+                StoreSetting::query()->value('low_stock_threshold') ?? 5
+            );
 
-    // La première variante d'un produit devient automatiquement
-    // sa variante par défaut.
-    if (! $hasVariants) {
-        $data['is_default'] = true;
-    }
-
-    // Si la nouvelle variante devient celle par défaut,
-    // les anciennes ne doivent plus l'être.
-    if ($data['is_default'] ?? false) {
-        ProductVariant::query()
-            ->where('product_id', $product->id)
-            ->where('is_default', true)
-            ->update([
-                'is_default' => false,
+            StockLevel::create([
+                'product_variant_id' => $variant->id,
+                'physical_quantity' => 0,
+                'reserved_quantity' => 0,
+                'low_stock_threshold' => $lowStockThreshold,
             ]);
-    }
 
-   $variant = ProductVariant::create($data);
-
-
-$lowStockThreshold = (int) (
-    StoreSetting::query()->value('low_stock_threshold') ?? 5
-);
-
-StockLevel::create([
-    'product_variant_id' => $variant->id,
-    'physical_quantity' => 0,
-    'reserved_quantity' => 0,
-    'low_stock_threshold' => $lowStockThreshold,
-]);
-
-
-return $variant;
-});
+            return $variant;
+        });
     }
 }

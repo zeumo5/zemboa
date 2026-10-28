@@ -36,6 +36,11 @@
 
 /* Independent merchant mini-site. Shared platform tokens, no marketplace header/footer. */
 .merchant-site { background: var(--color-zm-ivory); --merchant-header-height: 88px; }
+.merchant-site .zm-cart-link{color:var(--merchant-color);border-color:var(--merchant-color)}
+.merchant-site .zm-cart-count{background:var(--merchant-color)}
+.merchant-site .zm-cart-link:hover,.merchant-site .zm-cart-link[aria-current="page"]{border-color:var(--merchant-color);background:#f1f6f4}
+.merchant-site .merchant-search button{background:var(--merchant-color);color:white}
+.merchant-site .merchant-explore:hover,.merchant-site .merchant-product-action{color:var(--merchant-color)}
 .merchant-header { position: sticky; top: 0; z-index: 100; display: grid; grid-template-columns: minmax(200px, 1fr) minmax(240px, 560px) auto; gap: 24px; align-items: center; padding: 18px clamp(18px, 3vw, 48px); background: white; border-bottom: 3px solid var(--merchant-color); }
 .merchant-brand { display: flex; align-items: center; gap: 14px; min-width: 0; font: 800 20px/1.25 var(--display); overflow-wrap: anywhere; }
 .merchant-brand img, .merchant-monogram { width: 52px; height: 52px; flex: none; object-fit: contain; border-radius: 12px; background: var(--color-zm-ivory); }

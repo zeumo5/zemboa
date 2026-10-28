@@ -2,12 +2,12 @@
 
 namespace App\Actions\Pos;
 
-
 use App\Actions\Payments\FinalizeOrderPayment;
 use App\Models\PosCashMovement;
 use App\Models\PosRegister;
 use App\Models\PosSession;
 use App\Models\User;
+use App\Support\PosAccess;
 use App\Support\TenantContext;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -30,33 +30,7 @@ final class RecordPosCashMovement
     ): PosCashMovement {
         $storeId = app(TenantContext::class)->storeId();
 
-        $supervisor = $actor->roles()
-            ->whereIn('code', [
-                'STORE_OWNER',
-                'STORE_MANAGER',
-            ])
-            ->exists();
-
-        $forbiddenRole = $actor->roles()
-            ->whereIn('code', [
-                'DELIVERY_AGENT',
-                'SUPER_ADMIN',
-            ])
-            ->exists();
-
-        if (
-            $storeId === null ||
-            auth()->id() !== $actor->id ||
-            $actor->status !== 'ACTIVE' ||
-            (int) $actor->store_id !== (int) $storeId ||
-            ! $supervisor ||
-            $forbiddenRole ||
-            ! $actor->hasPermission('pos.cash_movements.manage')
-        ) {
-            throw new AuthorizationException(
-                'Mouvement de caisse non autorisé.'
-            );
-        }
+        PosAccess::authorizeCashMovements($actor);
 
         if (! in_array($type, ['CASH_IN', 'CASH_OUT'], true)) {
             throw ValidationException::withMessages([
@@ -70,8 +44,7 @@ final class RecordPosCashMovement
             $this->finalizer->amountToCents($amount) <= 0
         ) {
             throw ValidationException::withMessages([
-                'amount' =>
-                'Le montant doit être strictement positif.',
+                'amount' => 'Le montant doit être strictement positif.',
             ]);
         }
 
@@ -83,8 +56,7 @@ final class RecordPosCashMovement
             mb_strlen($reason) > 255
         ) {
             throw ValidationException::withMessages([
-                'reason' =>
-                'Une justification valide est obligatoire.',
+                'reason' => 'Une justification valide est obligatoire.',
             ]);
         }
 
@@ -144,8 +116,7 @@ final class RecordPosCashMovement
                 (int) $session->open_slot !== 1
             ) {
                 throw ValidationException::withMessages([
-                    'session' =>
-                    'Une session ouverte sur une caisse active est obligatoire.',
+                    'session' => 'Une session ouverte sur une caisse active est obligatoire.',
                 ]);
             }
 
@@ -158,8 +129,7 @@ final class RecordPosCashMovement
 
             if ($duplicate) {
                 throw ValidationException::withMessages([
-                    'reference' =>
-                    'Ce mouvement a déjà été enregistré.',
+                    'reference' => 'Ce mouvement a déjà été enregistré.',
                 ]);
             }
 
@@ -180,8 +150,7 @@ final class RecordPosCashMovement
                 $availableCents > $maxCents
             ) {
                 throw ValidationException::withMessages([
-                    'session' =>
-                    'Le solde actuel de la caisse est invalide.',
+                    'session' => 'Le solde actuel de la caisse est invalide.',
                 ]);
             }
 
@@ -191,8 +160,7 @@ final class RecordPosCashMovement
                 $movementCents > $availableCents
             ) {
                 throw ValidationException::withMessages([
-                    'amount' =>
-                    __('pos.cash_out_insufficient'),
+                    'amount' => __('pos.cash_out_insufficient'),
                 ]);
             }
 
@@ -205,8 +173,7 @@ final class RecordPosCashMovement
                 $movementCents > $maxCents - $availableCents
             ) {
                 throw ValidationException::withMessages([
-                    'amount' =>
-                    __('pos.cash_in_limit_exceeded'),
+                    'amount' => __('pos.cash_in_limit_exceeded'),
                 ]);
             }
 

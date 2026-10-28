@@ -71,7 +71,9 @@ final class SessionController extends Controller
                         return false;
                     }
                     $phone = BuyerIdentity::phoneOrNull($user->phone);
-                    if (!$phone || BuyerIdentity::phoneQuery($phone)->whereKeyNot($user->id)->exists()) return false;
+                    if (! $phone || BuyerIdentity::phoneQuery($phone)->whereKeyNot($user->id)->exists()) {
+                        return false;
+                    }
                     BuyerIdentity::assertSchemaReady();
                     $user->forceFill(['is_buyer' => true])->save();
                 }
@@ -90,12 +92,6 @@ final class SessionController extends Controller
 
         // Never reuse a professional intended URL or a caller-provided redirect.
         return redirect()->route('buyer.account');
-    }
-
-    public function account(): View
-    {
-        return view('buyer.account', ['buyer' => Auth::guard('buyer')->user(),
-            'phone' => BuyerIdentity::phoneOrNull(Auth::guard('buyer')->user()->phone)]);
     }
 
     public function logout(Request $request): RedirectResponse

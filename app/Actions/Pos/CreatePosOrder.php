@@ -1,6 +1,6 @@
 <?php
-namespace App\Actions\Pos;
 
+namespace App\Actions\Pos;
 
 use App\Actions\Orders\CreateOrder;
 use App\Models\Order;
@@ -57,16 +57,6 @@ final class CreatePosOrder
             );
         }
 
-        if (
-            trim($customerName) === '' ||
-            trim($customerPhone) === ''
-        ) {
-            throw ValidationException::withMessages([
-                'customer' =>
-                    'Le nom et le téléphone du client sont obligatoires.',
-            ]);
-        }
-
         return DB::transaction(function () use (
             $sessionId,
             $customerName,
@@ -114,8 +104,7 @@ final class CreatePosOrder
                 (int) $session->open_slot !== 1
             ) {
                 throw ValidationException::withMessages([
-                    'session' =>
-                        'La session POS doit être ouverte sur une caisse active.',
+                    'session' => 'La session POS doit être ouverte sur une caisse active.',
                 ]);
             }
 
@@ -138,7 +127,8 @@ final class CreatePosOrder
                 customerPhone: trim($customerPhone),
                 customerEmail: $customerEmail,
                 fulfillmentType: 'PICKUP',
-                items: $items
+                items: $items,
+                allowAnonymousPos: true
             );
 
             // Affectation côté serveur uniquement.
@@ -153,4 +143,3 @@ final class CreatePosOrder
         }, 3);
     }
 }
-

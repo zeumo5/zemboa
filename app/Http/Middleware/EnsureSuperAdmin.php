@@ -1,6 +1,6 @@
 <?php
-namespace App\Http\Middleware;
 
+namespace App\Http\Middleware;
 
 use App\Models\User;
 use Closure;
@@ -13,44 +13,21 @@ class EnsureSuperAdmin
         Request $request,
         Closure $next
     ): Response {
-        $user = $request->user();
+        $user = $request->user('web');
 
         // L'utilisateur doit être authentifié.
         if (! $user instanceof User) {
             abort(401);
         }
 
-        // Seuls les comptes actifs sont autorisés.
-        if ($user->status !== 'ACTIVE') {
-            abort(403, 'Compte administrateur inactif.');
+        if (! $user->canUseSuperAdminAccount()) {
+            abort(403, 'Identité administrateur non autorisée.');
         }
 
-        // Un super administrateur est indépendant
-        // des boutiques des commerçants.
-        if ($user->store_id !== null) {
-            abort(403, 'Accès administrateur interdit.');
-        }
+        $response = $next($request);
+        $response->headers->set('Cache-Control', 'private, no-store');
+        $response->headers->set('Referrer-Policy', 'no-referrer');
 
-        // Vérifier le rôle administratif.
-        if (! $user->hasRole('SUPER_ADMIN')) {
-            abort(403, 'Accès réservé au super administrateur.');
-        }
-
-        // Refuser les comptes cumulant des rôles
-        // commerçants et super administrateur.
-        if (
-            $user->roles()
-                ->whereIn('code', [
-                    'STORE_OWNER',
-                    'STORE_MANAGER',
-                    'CASHIER',
-                    'DELIVERY_AGENT',
-                ])
-                ->exists()
-        ) {
-            abort(403, 'Conflit de rôles administratifs.');
-        }
-
-        return $next($request);
+        return $response;
     }
 }

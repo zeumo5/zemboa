@@ -27,7 +27,7 @@
         <a href="{{ route('marketplace.home') }}" @if(request()->routeIs('marketplace.home')) aria-current="page" @endif>{{ __('marketplace.navigation_home') }}</a>
         <a href="{{ route('marketplace.products') }}" @if(request()->routeIs('marketplace.products', 'marketplace.products.*')) aria-current="page" @endif>{{ __('marketplace.navigation_products') }}</a>
         <a href="{{ route('marketplace.stores') }}" @if(request()->routeIs('marketplace.stores', 'marketplace.shops.*')) aria-current="page" @endif>{{ __('marketplace.navigation_stores') }}</a>
-        <a href="{{ route(auth('buyer')->check() ? 'buyer.account' : 'buyer.login') }}" @if(request()->routeIs('buyer.*')) aria-current="page" @endif>{{ __('buyer.space') }}</a>
+        @if(!auth('web')->check() || auth('buyer')->user()?->canUseBuyerAccount())<a @if(auth('buyer')->user()?->canUseBuyerAccount()) data-buyer-space @endif href="{{ route(auth('buyer')->check() ? 'buyer.account' : 'buyer.login') }}" @if(request()->routeIs('buyer.*')) aria-current="page" @endif>{{ __('buyer.space') }}</a>@endif
       </nav>
       <div class="zm-nav-right">
         @include('marketplace.partials.cart-link')
@@ -42,12 +42,8 @@
           <span>/</span>
           <button type="button" data-locale="en" class="{{ app()->getLocale() === 'en' ? 'active' : '' }}" aria-pressed="{{ app()->getLocale() === 'en' ? 'true' : 'false' }}">EN</button>
         </div>
-        @guest
-          <a href="{{ route('login') }}" class="zm-nav-login" aria-label="{{ __('marketplace.pro_space') }}">{{ __('marketplace.pro_space') }} <span aria-hidden="true">↗</span></a>
-        @endguest
-        @auth
-          <a href="{{ route('account.show') }}" class="zm-nav-login" aria-label="{{ __('marketplace.my_account') }}">{{ __('marketplace.my_account') }} <span aria-hidden="true">↗</span></a>
-        @endauth
+        @include('marketplace.partials.account-links', ['showBuyer'=>false])
+
       </div>
     </div>
   </header>

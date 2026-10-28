@@ -1,0 +1,1 @@
+<div class="customer-empty">@include('buyer.icon', ['icon' => 'orders'])<h2>{{ __('customer.empty_title') }}</h2><p>{{ __('customer.empty') }}</p><a class="customer-button" href="{{ route('marketplace.stores') }}">{{ __('buyer.explore') }}</a></div>

@@ -1,0 +1,28 @@
+<?php
+
+return [
+    'space' => 'Super administration', 'dashboard' => 'Tableau de bord', 'stores' => 'Boutiques',
+    'welcome' => 'Administration de la plateforme ZEMBOA', 'intro' => 'Supervisez les boutiques et accompagnez leurs propriétaires.',
+    'active' => 'Boutiques actives', 'pending' => 'En attente d’activation', 'inactive' => 'Boutiques désactivées', 'professionals' => 'Utilisateurs professionnels',
+    'recent' => 'Boutiques récentes', 'all' => 'Toutes les boutiques', 'create' => 'Créer une boutique', 'view' => 'Consulter', 'platform' => 'Voir la plateforme', 'menu' => 'Menu administrateur',
+    'logout' => 'Déconnexion', 'login' => 'Connexion administrateur', 'email' => 'E-mail', 'password' => 'Mot de passe', 'connect' => 'Se connecter',
+    'name' => 'Nom de la boutique', 'slug' => 'Slug', 'description' => 'Description', 'phone' => 'Téléphone', 'address' => 'Adresse',
+    'owner' => 'Propriétaire', 'owner_name' => 'Nom du propriétaire', 'owner_email' => 'E-mail du propriétaire', 'date' => 'Créée le', 'status' => 'Statut',
+    'search' => 'Rechercher', 'search_hint' => 'Nom ou slug de boutique', 'filter' => 'Filtrer', 'any' => 'Tous les statuts', 'reset' => 'Réinitialiser les filtres',
+    'empty' => 'Aucune boutique à afficher.', 'not_recorded' => 'Non renseigné', 'back' => 'Retour aux boutiques', 'details' => 'Informations de la boutique', 'new_owner' => 'Nouveau propriétaire à inviter',
+    'creation_hint' => 'La boutique est créée en attente. Un compte propriétaire invité est créé avec un secret aléatoire non communiqué. Aucun compte existant n’est rattaché.',
+    'owner_hint' => 'Utilisez une adresse e-mail disponible. Le propriétaire définira lui-même son mot de passe depuis son invitation.',
+    'created' => 'Boutique créée en attente. Vous pouvez maintenant envoyer l’invitation au propriétaire.',
+    'email_used' => 'Cette adresse est déjà utilisée. Aucun compte existant ne sera modifié ou rattaché.',
+    'invite' => 'Envoyer l’invitation au propriétaire', 'invitation_sent' => 'Invitation transmise au service de messagerie configuré.',
+    'invite_hint' => 'Lien à usage unique, valable 60 minutes. L’activation du compte ne rend pas automatiquement la boutique active.',
+    'invite_unavailable' => 'Invitation indisponible : un propriétaire unique, invité, non vérifié et exclusivement STORE_OWNER est requis, pour une boutique en attente ou active.',
+    'activation' => 'Décision administrative', 'reason' => 'Motif de la décision', 'reason_hint' => '10 à 500 caractères. Ce motif est conservé dans l’historique.',
+    'apply' => 'Enregistrer la décision', 'status_updated' => 'Statut mis à jour et décision enregistrée.',
+    'activation_hint' => 'L’activation exige un propriétaire unique, actif, vérifié et exclusivement STORE_OWNER. La désactivation applique les restrictions existantes.',
+    'history' => 'Historique des décisions', 'no_history' => 'Aucune décision enregistrée.', 'distribution' => 'Répartition des boutiques',
+    'future' => 'Les demandes publiques d’ouverture et la gestion complète des utilisateurs seront développées ultérieurement.',
+    'validation' => 'Veuillez corriger les champs signalés.', 'required' => 'Champs marqués * obligatoires.',
+    'statuses' => ['PENDING' => 'En attente', 'ACTIVE' => 'Active', 'INACTIVE' => 'Inactive', 'SUSPENDED' => 'Suspendue'],
+    'user_statuses' => ['INVITED' => 'Invité', 'ACTIVE' => 'Actif', 'INACTIVE' => 'Inactif', 'SUSPENDED' => 'Suspendu'],
+];

@@ -20,6 +20,7 @@ use Database\Seeders\RoleSeeder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Tests\TestCase;
@@ -56,7 +57,7 @@ class RecordPosCashMovementTest extends TestCase
     private function createStore(string $slug = 'alpha'): Store
     {
         return Store::create([
-            'name' => 'Boutique ' . $slug,
+            'name' => 'Boutique '.$slug,
             'slug' => $slug,
             'status' => 'ACTIVE',
         ]);
@@ -160,33 +161,83 @@ class RecordPosCashMovementTest extends TestCase
         $this->assertDatabaseCount('payments', 0);
     }
 
-    public function test_manager_can_record_movement(): void
+    public function test_manager_cannot_record_movement_even_with_legacy_permission(): void
     {
         $store = $this->createStore();
         $owner = $this->createActor($store);
-
-        $manager = $this->createActor(
-            $store,
-            'STORE_MANAGER'
-        );
-
+        $manager = $this->createActor($store, 'STORE_MANAGER');
         $session = $this->openSession($store, $owner);
+        Role::where('code', 'STORE_MANAGER')->firstOrFail()->permissions()->syncWithoutDetaching([
+            Permission::where('code', 'pos.cash_movements.manage')->firstOrFail()->id,
+        ]);
+        $this->expectException(AuthorizationException::class);
+        $this->record($store, $session, $manager);
+    }
 
-        $movement = $this->record(
-            $store,
-            $session,
-            $manager
-        );
+    public function test_direct_http_endpoints_reject_non_owners_and_mixed_roles_with_stale_grants(): void
+    {
+        $store = $this->createStore();
+        $owner = $this->createActor($store);
+        $session = $this->openSession($store, $owner);
+        $permission = Permission::where('code', 'pos.cash_movements.manage')->firstOrFail();
+        foreach (['STORE_MANAGER', 'CASHIER', 'DELIVERY_AGENT', 'SUPER_ADMIN'] as $code) {
+            $actor = $this->createActor($store, $code);
+            $actor->roles()->firstOrFail()->permissions()->syncWithoutDetaching([$permission->id]);
+            $this->actingAs($actor, 'web');
+            $this->getJson(route('pos.cash-movements.index', $session->id))->assertForbidden();
+            $this->postJson(route('pos.cash-movements.store', $session->id), ['type' => 'CASH_IN', 'amount' => '100', 'reason' => 'Fictional audit', 'reference' => 'RBAC-STALE-0001'])->assertForbidden();
+        }
+        foreach (['STORE_MANAGER', 'CASHIER', 'DELIVERY_AGENT', 'SUPER_ADMIN', 'FUTURE_ROLE'] as $code) {
+            $actor = $this->createActor($store);
+            $extra = Role::firstOrCreate(['code' => $code], ['name' => 'Fictional additional role']);
+            $actor->roles()->attach($extra);
+            $this->actingAs($actor, 'web');
+            $this->getJson(route('pos.cash-movements.index', $session->id))->assertForbidden();
+            $this->postJson(route('pos.cash-movements.store', $session->id), ['type' => 'CASH_OUT', 'amount' => '100', 'reason' => 'Fictional audit', 'reference' => 'RBAC-MIXED-0001'])->assertForbidden();
+            try {
+                $this->record($store, $session, $actor);
+                $this->fail('Mixed owner roles must be rejected by the action.');
+            } catch (AuthorizationException) {
+                $this->assertDatabaseCount('pos_cash_movements', 0);
+            }
+        }
+        $this->assertDatabaseCount('payments', 0);
+    }
 
-        $this->assertSame(
-            $manager->id,
-            $movement->recorded_by_user_id
-        );
+    public function test_owner_http_access_is_scoped_and_inactive_identity_is_rejected(): void
+    {
+        $store = $this->createStore();
+        $owner = $this->createActor($store);
+        $session = $this->openSession($store, $owner);
+        $this->getJson(route('pos.cash-movements.index', $session->id))->assertOk();
+        $this->postJson(route('pos.cash-movements.store', $session->id), ['type' => 'CASH_IN', 'amount' => '100', 'reason' => 'Fictional owner movement', 'reference' => 'RBAC-OWNER-0001'])->assertCreated();
+        $otherStore = $this->createStore('foreign-owner');
+        $otherOwner = $this->createActor($otherStore);
+        $this->actingAs($otherOwner, 'web');
+        $this->getJson(route('pos.cash-movements.index', $session->id))->assertNotFound();
+        $this->postJson(route('pos.cash-movements.store', $session->id), ['type' => 'CASH_IN', 'amount' => '100', 'reason' => 'Fictional foreign movement', 'reference' => 'RBAC-FOREIGN-0001'])->assertNotFound();
+        $this->actingAs($owner, 'web');
+        $owner->forceFill(['status' => 'INACTIVE'])->save();
+        $this->getJson(route('pos.cash-movements.index', $session->id))->assertForbidden();
+        $this->postJson(route('pos.cash-movements.store', $session->id), [])->assertForbidden();
+        $this->assertDatabaseCount('pos_cash_movements', 1);
+    }
 
-        $this->assertSame(
-            $session->id,
-            $movement->pos_session_id
-        );
+    public function test_corrective_migration_revokes_only_manual_permission_and_is_idempotent(): void
+    {
+        $owner = Role::where('code', 'STORE_OWNER')->firstOrFail();
+        $permission = Permission::where('code', 'pos.cash_movements.manage')->firstOrFail();
+        $legacy = require database_path('migrations/2026_10_18_135637_add_pos_cash_movement_permission.php');
+        $legacy->up();
+        $unknown = Role::create(['code' => 'FUTURE_ROLE', 'name' => 'Fictional role']);
+        $unknown->permissions()->attach($permission);
+        $before = DB::table('permission_role')->where('permission_id', '!=', $permission->id)->orderBy('role_id')->orderBy('permission_id')->get()->toArray();
+        $migration = require database_path('migrations/2026_10_24_142445_restrict_manual_pos_cash_movements_to_store_owner.php');
+        $migration->up();
+        $migration->up();
+        $migration->down();
+        $this->assertSame([$owner->id], DB::table('permission_role')->where('permission_id', $permission->id)->pluck('role_id')->all());
+        $this->assertEquals($before, DB::table('permission_role')->where('permission_id', '!=', $permission->id)->orderBy('role_id')->orderBy('permission_id')->get()->toArray());
     }
 
     public function test_cashier_cannot_record_manual_movement(): void
@@ -327,7 +378,7 @@ class RecordPosCashMovementTest extends TestCase
 
                 $this->fail(
                     'La validation aurait dû refuser : '
-                        . $expectedField
+                        .$expectedField
                 );
             } catch (ValidationException $exception) {
                 $this->assertArrayHasKey(

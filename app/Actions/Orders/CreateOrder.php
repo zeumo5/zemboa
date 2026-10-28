@@ -2,13 +2,17 @@
 
 namespace App\Actions\Orders;
 
-use App\Models\StoreSetting;
-use App\Models\DeliveryZone;
 use App\Actions\Customers\FindOrCreateCustomer;
 use App\Actions\Stock\CreateStockReservation;
+use App\Models\DeliveryZone;
 use App\Models\Order;
 use App\Models\ProductVariant;
+use App\Models\StoreSetting;
+use App\Support\BuyerIdentity;
+use App\Support\PosAccess;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class CreateOrder
 {
@@ -29,17 +33,31 @@ class CreateOrder
         ?string $deliveryAddress = null,
         ?string $deliveryArea = null,
         ?string $deliveryInstructions = null,
+        bool $allowAnonymousPos = false,
+        ?CarbonInterface $pricedAt = null,
 
     ): Order {
+        $withoutCustomerRecord = $allowAnonymousPos && (trim($customerName) === '' || trim($customerPhone) === '');
+        if ($allowAnonymousPos) {
+            PosAccess::authorize(auth('web')->user());
+            abort_unless($fulfillmentType === 'PICKUP', 422);
+            if (trim($customerPhone) !== '') {
+                $normalized = BuyerIdentity::phoneOrNull($customerPhone);
+                if ($normalized === null) {
+                    throw ValidationException::withMessages(['customer_phone' => __('team.invalid_phone')]);
+                }
+                $customerPhone = $normalized;
+            }
+        }
 
         if (! in_array($fulfillmentType, ['PICKUP', 'DELIVERY'], true)) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'fulfillment_type' => __('orders.fulfillment_invalid'),
             ]);
         }
 
         if ($fulfillmentType === 'DELIVERY' && $deliveryZoneId === null) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'delivery_zone_id' => __('orders.delivery_zone_required'),
             ]);
         }
@@ -48,13 +66,13 @@ class CreateOrder
             $fulfillmentType === 'DELIVERY'
             && ($deliveryAddress === null || trim($deliveryAddress) === '')
         ) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'delivery_address' => __('orders.delivery_address_required'),
             ]);
         }
 
         if (empty($items)) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
+            throw ValidationException::withMessages([
                 'items' => __('orders.items_required'),
             ]);
         }
@@ -69,7 +87,7 @@ class CreateOrder
                 filter_var($variantId, FILTER_VALIDATE_INT) === false
                 || (int) $variantId <= 0
             ) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
+                throw ValidationException::withMessages([
                     'items' => __('orders.variant_invalid'),
                 ]);
             }
@@ -78,7 +96,7 @@ class CreateOrder
                 filter_var($quantity, FILTER_VALIDATE_INT) === false
                 || (int) $quantity <= 0
             ) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
+                throw ValidationException::withMessages([
                     'quantity' => __('orders.quantity_invalid'),
                 ]);
             }
@@ -87,6 +105,9 @@ class CreateOrder
             $quantity = (int) $quantity;
 
             if (isset($mergedItems[$variantId])) {
+                if ($quantity > PHP_INT_MAX - $mergedItems[$variantId]['quantity']) {
+                    throw ValidationException::withMessages(['quantity' => __('orders.quantity_invalid')]);
+                }
                 $mergedItems[$variantId]['quantity'] += $quantity;
             } else {
                 $mergedItems[$variantId] = [
@@ -96,6 +117,7 @@ class CreateOrder
             }
         }
 
+        ksort($mergedItems, SORT_NUMERIC);
         $items = array_values($mergedItems);
 
         return DB::transaction(function () use (
@@ -108,19 +130,23 @@ class CreateOrder
             $deliveryAddress,
             $deliveryArea,
             $deliveryInstructions,
+            $withoutCustomerRecord,
+            $pricedAt,
         ) {
 
-
             $storeSettings = StoreSetting::query()->first();
+
+            if (! $storeSettings || ! $storeSettings->hasCommercialConfiguration()) {
+                throw ValidationException::withMessages(['fulfillment_type' => __('checkout.no_service')]);
+            }
 
             if ($storeSettings !== null) {
                 if (
                     $fulfillmentType === 'DELIVERY'
                     && ! $storeSettings->delivery_enabled
                 ) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
-                        'fulfillment_type' =>
-                        __('orders.delivery_disabled'),
+                    throw ValidationException::withMessages([
+                        'fulfillment_type' => __('orders.delivery_disabled'),
                     ]);
                 }
 
@@ -128,47 +154,29 @@ class CreateOrder
                     $fulfillmentType === 'PICKUP'
                     && ! $storeSettings->pickup_enabled
                 ) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
-                        'fulfillment_type' =>
-                        __('orders.pickup_disabled'),
+                    throw ValidationException::withMessages([
+                        'fulfillment_type' => __('orders.pickup_disabled'),
                     ]);
                 }
             }
 
-
-            $customer = $this->findOrCreateCustomer->execute(
-                name: $customerName,
-                phone: $customerPhone,
-                email: $customerEmail,
-            );
-
-            $deliveryZone = null;
-            $deliveryFee = '0.00';
-
-            if ($fulfillmentType === 'DELIVERY') {
-                $deliveryZone = DeliveryZone::query()
-                    ->where('status', 'ACTIVE')
-                    ->findOrFail($deliveryZoneId);
-
-                $deliveryFee = $deliveryZone->fee;
-            }
-
+            $pricedAt ??= now();
             $preparedItems = [];
-
 
             foreach ($items as $item) {
                 $variant = ProductVariant::query()
                     ->with('product')
+                    ->lockForUpdate()
                     ->findOrFail($item['product_variant_id']);
 
                 if ($variant->status !== 'ACTIVE') {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
+                    throw ValidationException::withMessages([
                         'items' => __('orders.variant_unavailable'),
                     ]);
                 }
 
                 if ($variant->product->status !== 'ACTIVE') {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
+                    throw ValidationException::withMessages([
                         'items' => __('orders.product_unavailable'),
                     ]);
                 }
@@ -179,14 +187,14 @@ class CreateOrder
                     filter_var($quantity, FILTER_VALIDATE_INT) === false
                     || (int) $quantity <= 0
                 ) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
+                    throw ValidationException::withMessages([
                         'quantity' => __('orders.quantity_invalid'),
                     ]);
                 }
 
                 $quantity = (int) $quantity;
                 $unitPrice = $variant->price;
-                $finalUnitPrice = $variant->effectivePrice();
+                $finalUnitPrice = $variant->effectivePrice($pricedAt);
 
                 $preparedItems[] = [
                     'variant' => $variant,
@@ -196,9 +204,21 @@ class CreateOrder
                 ];
             }
 
+            $deliveryZone = null;
+            $deliveryFee = '0.00';
+
+            if ($fulfillmentType === 'DELIVERY') {
+                $deliveryZone = DeliveryZone::query()
+                    ->where('status', 'ACTIVE')
+                    ->lockForUpdate()
+                    ->findOrFail($deliveryZoneId);
+
+                $deliveryFee = $this->priceCalculator->deliveryFee($deliveryZone->getRawOriginal('fee'));
+            }
+
             $amounts = $this->priceCalculator->calculate(
                 items: array_map(
-                    fn(array $item) => [
+                    fn (array $item) => [
                         'quantity' => $item['quantity'],
                         'unit_price' => $item['unit_price'],
                         'final_unit_price' => $item['final_unit_price'],
@@ -208,6 +228,15 @@ class CreateOrder
                 deliveryFee: $deliveryFee,
             );
 
+            if ($this->priceCalculator->toFcfa($amounts['total']) <= 0) {
+                throw ValidationException::withMessages(['items' => __('promotions.zero_total')]);
+            }
+
+            $customer = $withoutCustomerRecord ? null : $this->findOrCreateCustomer->execute(
+                name: $customerName,
+                phone: $customerPhone,
+                email: $customerEmail,
+            );
 
             $reservationMinutes = $storeSettings
                 ? $storeSettings->reservation_duration_minutes
@@ -217,9 +246,8 @@ class CreateOrder
                 $reservationMinutes
             );
 
-
             $order = Order::create([
-                'customer_id' => $customer->id,
+                'customer_id' => $customer?->id,
                 'order_number' => $this->generateOrderNumber->execute(),
                 'status' => 'PENDING',
                 'payment_status' => 'UNPAID',
@@ -238,8 +266,8 @@ class CreateOrder
                     ? trim($deliveryInstructions)
                     : null,
                 // Snapshot des informations du client au moment du checkout.
-                'customer_name' => $customerName,
-                'customer_phone' => $customer->phone,
+                'customer_name' => $withoutCustomerRecord ? (trim($customerName) ?: null) : $customerName,
+                'customer_phone' => $withoutCustomerRecord ? (trim($customerPhone) ?: null) : $customer?->phone,
                 'customer_email' => $customerEmail,
 
                 'subtotal' => $amounts['subtotal'],
@@ -266,12 +294,12 @@ class CreateOrder
                     'product_name' => $variant->product->name,
                     'variant_description' => null,
                     'sku' => $variant->sku,
-                    'unit_price' => $unitPrice . '.00',
+                    'unit_price' => $unitPrice.'.00',
                     'discount_percentage' => null,
-                    'discount_amount' => ($unitPrice - $finalUnitPrice) . '.00',
-                    'final_unit_price' => $finalUnitPrice . '.00',
+                    'discount_amount' => ($unitPrice - $finalUnitPrice).'.00',
+                    'final_unit_price' => $finalUnitPrice.'.00',
                     'quantity' => $quantity,
-                    'line_total' => ($finalUnitPrice * $quantity) . '.00',
+                    'line_total' => ($finalUnitPrice * $quantity).'.00',
                 ]);
 
                 $this->createStockReservation->execute(

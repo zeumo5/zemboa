@@ -2,25 +2,26 @@
 
 namespace Tests\Feature;
 
-use Illuminate\Validation\ValidationException;
-use App\Actions\Orders\ExpireOrder;
+use App\Actions\Customers\FindOrCreateCustomer;
 use App\Actions\Orders\CancelOrder;
-use App\Models\StockReservation;
-use App\Models\DeliveryZone;
+use App\Actions\Orders\CreateOrder;
+use App\Actions\Orders\ExpireOrder;
 use App\Actions\ProductVariant\CreateProductVariant;
 use App\Actions\Stock\ReceiveStock;
-use App\Actions\Orders\CreateOrder;
-use App\Actions\Customers\FindOrCreateCustomer;
 use App\Models\Category;
-use App\Models\OrderItem;
+use App\Models\Customer;
+use App\Models\DeliveryZone;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductVariant;
-use App\Models\Customer;
-use App\Models\Order;
+use App\Models\StockReservation;
 use App\Models\Store;
+use App\Models\StoreSetting;
 use App\Models\User;
 use App\Support\TenantContext;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class OrderTest extends TestCase
@@ -365,6 +366,7 @@ class OrderTest extends TestCase
         ]);
 
         app(TenantContext::class)->setFromUser($user);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
         $category = Category::create([
             'name' => 'Téléphones',
@@ -468,6 +470,7 @@ class OrderTest extends TestCase
         ]);
 
         app(TenantContext::class)->setFromUser($user);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
         $category = Category::create([
             'name' => 'Téléphones',
@@ -512,7 +515,7 @@ class OrderTest extends TestCase
             );
 
             $this->fail('La commande aurait dû être refusée.');
-        } catch (\Illuminate\Validation\ValidationException $exception) {
+        } catch (ValidationException $exception) {
             $this->assertArrayHasKey('quantity', $exception->errors());
         }
 
@@ -543,6 +546,7 @@ class OrderTest extends TestCase
         ]);
 
         app(TenantContext::class)->setFromUser($user);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
         $category = Category::create([
             'name' => 'Téléphones',
@@ -610,7 +614,7 @@ class OrderTest extends TestCase
             $this->fail(
                 'La commande aurait dû être entièrement refusée.'
             );
-        } catch (\Illuminate\Validation\ValidationException $exception) {
+        } catch (ValidationException $exception) {
             $this->assertArrayHasKey(
                 'quantity',
                 $exception->errors()
@@ -658,6 +662,7 @@ class OrderTest extends TestCase
         ]);
 
         app(TenantContext::class)->setFromUser($user);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
         $category = Category::create([
             'name' => 'Téléphones',
@@ -702,7 +707,7 @@ class OrderTest extends TestCase
             );
 
             $this->fail('Une quantité fractionnaire aurait dû être refusée.');
-        } catch (\Illuminate\Validation\ValidationException $exception) {
+        } catch (ValidationException $exception) {
             $this->assertArrayHasKey('quantity', $exception->errors());
         }
 
@@ -723,6 +728,7 @@ class OrderTest extends TestCase
         ]);
 
         app(TenantContext::class)->setFromUser($user);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
         try {
             app(CreateOrder::class)->execute(
@@ -734,7 +740,7 @@ class OrderTest extends TestCase
             );
 
             $this->fail('Une commande sans article aurait dû être refusée.');
-        } catch (\Illuminate\Validation\ValidationException $exception) {
+        } catch (ValidationException $exception) {
             $this->assertArrayHasKey('items', $exception->errors());
         }
 
@@ -755,6 +761,7 @@ class OrderTest extends TestCase
         ]);
 
         app(TenantContext::class)->setFromUser($user);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
         try {
             app(CreateOrder::class)->execute(
@@ -771,7 +778,7 @@ class OrderTest extends TestCase
             );
 
             $this->fail('Un type de livraison invalide aurait dû être refusé.');
-        } catch (\Illuminate\Validation\ValidationException $exception) {
+        } catch (ValidationException $exception) {
             $this->assertArrayHasKey(
                 'fulfillment_type',
                 $exception->errors()
@@ -806,6 +813,7 @@ class OrderTest extends TestCase
 
         // Création du produit dans la boutique B.
         app(TenantContext::class)->setFromUser($userB);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
         $categoryB = Category::create([
             'name' => 'Téléphones',
@@ -837,6 +845,7 @@ class OrderTest extends TestCase
 
         // On repasse maintenant dans la boutique A.
         app(TenantContext::class)->setFromUser($userA);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
         try {
             app(CreateOrder::class)->execute(
@@ -855,7 +864,7 @@ class OrderTest extends TestCase
             $this->fail(
                 'Une boutique ne doit pas pouvoir commander une variante appartenant à une autre boutique.'
             );
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $exception) {
+        } catch (ModelNotFoundException $exception) {
             $this->assertSame(
                 ProductVariant::class,
                 $exception->getModel()
@@ -879,6 +888,7 @@ class OrderTest extends TestCase
         ]);
 
         app(TenantContext::class)->setFromUser($user);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
         $category = Category::create([
             'name' => 'Téléphones',
@@ -900,7 +910,6 @@ class OrderTest extends TestCase
             'is_default' => true,
             'status' => 'INACTIVE',
         ]);
-
 
         app(ReceiveStock::class)->execute(
             productVariantId: $variant->id,
@@ -924,7 +933,7 @@ class OrderTest extends TestCase
             );
 
             $this->fail('Une variante inactive aurait dû être refusée.');
-        } catch (\Illuminate\Validation\ValidationException $exception) {
+        } catch (ValidationException $exception) {
             $this->assertArrayHasKey(
                 'items',
                 $exception->errors()
@@ -948,6 +957,7 @@ class OrderTest extends TestCase
         ]);
 
         app(TenantContext::class)->setFromUser($user);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
         $category = Category::create([
             'name' => 'Téléphones',
@@ -996,7 +1006,7 @@ class OrderTest extends TestCase
             $this->fail(
                 'Une variante appartenant à un produit inactif aurait dû être refusée.'
             );
-        } catch (\Illuminate\Validation\ValidationException $exception) {
+        } catch (ValidationException $exception) {
             $this->assertArrayHasKey(
                 'items',
                 $exception->errors()
@@ -1020,6 +1030,7 @@ class OrderTest extends TestCase
         ]);
 
         app(TenantContext::class)->setFromUser($user);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
         $category = Category::create([
             'name' => 'Téléphones',
@@ -1176,6 +1187,7 @@ class OrderTest extends TestCase
         ]);
 
         app(TenantContext::class)->setFromUser($user);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
         $category = Category::create([
             'name' => 'Téléphones',
@@ -1222,7 +1234,7 @@ class OrderTest extends TestCase
             $this->fail(
                 'Une commande DELIVERY sans zone de livraison aurait dû être refusée.'
             );
-        } catch (\Illuminate\Validation\ValidationException $exception) {
+        } catch (ValidationException $exception) {
             $this->assertArrayHasKey(
                 'delivery_zone_id',
                 $exception->errors()
@@ -1246,6 +1258,7 @@ class OrderTest extends TestCase
         ]);
 
         app(TenantContext::class)->setFromUser($user);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
         $zone = DeliveryZone::create([
             'name' => 'Bonaberi',
@@ -1269,7 +1282,7 @@ class OrderTest extends TestCase
 
         $variant = app(CreateProductVariant::class)->execute([
             'product_id' => $product->id,
-           'sku' => 'PICKUP-IGNORE-001',
+            'sku' => 'PICKUP-IGNORE-001',
             'price' => '10000.00',
             'is_default' => true,
             'status' => 'ACTIVE',
@@ -1348,6 +1361,7 @@ class OrderTest extends TestCase
 
         // Création de la zone dans la boutique B.
         app(TenantContext::class)->setFromUser($userB);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
         $zoneB = DeliveryZone::create([
             'name' => 'Bonamoussadi',
@@ -1358,6 +1372,16 @@ class OrderTest extends TestCase
 
         // On passe maintenant dans la boutique A.
         app(TenantContext::class)->setFromUser($userA);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
+        $categoryA = Category::create(['name' => 'Catalogue Alpha', 'slug' => 'catalogue-alpha', 'status' => 'ACTIVE']);
+        $productA = Product::create(['category_id' => $categoryA->id, 'name' => 'Produit Alpha', 'slug' => 'produit-alpha', 'status' => 'ACTIVE']);
+        $variantA = app(CreateProductVariant::class)->execute([
+            'product_id' => $productA->id,
+            'sku' => 'ZONE-FOREIGN-001',
+            'price' => '1000.00',
+            'is_default' => true,
+            'status' => 'ACTIVE',
+        ]);
 
         try {
             app(CreateOrder::class)->execute(
@@ -1367,9 +1391,7 @@ class OrderTest extends TestCase
                 fulfillmentType: 'DELIVERY',
                 items: [
                     [
-                        // L'ID n'a pas besoin d'exister :
-                        // la zone doit être refusée avant le checkout.
-                        'product_variant_id' => 1,
+                        'product_variant_id' => $variantA->id,
                         'quantity' => 1,
                     ],
                 ],
@@ -1380,7 +1402,7 @@ class OrderTest extends TestCase
             $this->fail(
                 'Une boutique ne doit pas pouvoir utiliser la zone de livraison d’une autre boutique.'
             );
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $exception) {
+        } catch (ModelNotFoundException $exception) {
             $this->assertSame(
                 DeliveryZone::class,
                 $exception->getModel()
@@ -1404,12 +1426,22 @@ class OrderTest extends TestCase
         ]);
 
         app(TenantContext::class)->setFromUser($user);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
         $zone = DeliveryZone::create([
             'name' => 'Bonaberi',
             'city' => 'Douala',
             'fee' => '1500.00',
             'status' => 'INACTIVE',
+        ]);
+        $category = Category::create(['name' => 'Catalogue Alpha', 'slug' => 'catalogue-alpha', 'status' => 'ACTIVE']);
+        $product = Product::create(['category_id' => $category->id, 'name' => 'Produit Alpha', 'slug' => 'produit-alpha', 'status' => 'ACTIVE']);
+        $variant = app(CreateProductVariant::class)->execute([
+            'product_id' => $product->id,
+            'sku' => 'ZONE-INACTIVE-001',
+            'price' => '1000.00',
+            'is_default' => true,
+            'status' => 'ACTIVE',
         ]);
 
         try {
@@ -1420,7 +1452,7 @@ class OrderTest extends TestCase
                 fulfillmentType: 'DELIVERY',
                 items: [
                     [
-                        'product_variant_id' => 1,
+                        'product_variant_id' => $variant->id,
                         'quantity' => 1,
                     ],
                 ],
@@ -1431,7 +1463,7 @@ class OrderTest extends TestCase
             $this->fail(
                 'Une zone de livraison inactive aurait dû être refusée.'
             );
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $exception) {
+        } catch (ModelNotFoundException $exception) {
             $this->assertSame(
                 DeliveryZone::class,
                 $exception->getModel()
@@ -1455,6 +1487,7 @@ class OrderTest extends TestCase
         ]);
 
         app(TenantContext::class)->setFromUser($user);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
         $zone = DeliveryZone::create([
             'name' => 'Bonaberi',
@@ -1506,11 +1539,10 @@ class OrderTest extends TestCase
                 deliveryZoneId: $zone->id,
             );
 
-
             $this->fail(
                 'Une commande DELIVERY sans adresse aurait dû être refusée.'
             );
-        } catch (\Illuminate\Validation\ValidationException $exception) {
+        } catch (ValidationException $exception) {
             $this->assertArrayHasKey(
                 'delivery_address',
                 $exception->errors()
@@ -1522,629 +1554,631 @@ class OrderTest extends TestCase
     }
 
     public function test_pickup_order_ignores_delivery_information(): void
-{
-   $store = Store::create([
-    'name' => 'Boutique Pickup',
-    'slug' => 'boutique-pickup',
-    'status' => 'ACTIVE',
-]);
+    {
+        $store = Store::create([
+            'name' => 'Boutique Pickup',
+            'slug' => 'boutique-pickup',
+            'status' => 'ACTIVE',
+        ]);
 
-$user = User::factory()->create([
-    'store_id' => $store->id,
-]);
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+        ]);
 
-$this->actingAs($user);
+        $this->actingAs($user);
 
-app(TenantContext::class)->setFromUser($user);
-    
-$category = Category::create([
-    'name' => 'Produits Pickup',
-    'slug' => 'produits-pickup',
-    'status' => 'ACTIVE',
-]);
+        app(TenantContext::class)->setFromUser($user);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
-$product = Product::create([
-    'category_id' => $category->id,
-    'name' => 'Produit Pickup',
-    'slug' => 'produit-pickup',
-    'status' => 'ACTIVE',
-]);
+        $category = Category::create([
+            'name' => 'Produits Pickup',
+            'slug' => 'produits-pickup',
+            'status' => 'ACTIVE',
+        ]);
 
-$variant = app(CreateProductVariant::class)->execute([
-    'product_id' => $product->id,
-    'sku' => 'PICKUP-IGNORE-001',
-    'price' => '10000.00',
-    'is_default' => true,
-    'status' => 'ACTIVE',
-]);
+        $product = Product::create([
+            'category_id' => $category->id,
+            'name' => 'Produit Pickup',
+            'slug' => 'produit-pickup',
+            'status' => 'ACTIVE',
+        ]);
 
-app(ReceiveStock::class)->execute(
-    productVariantId: $variant->id,
-    quantity: 10,
-    userId: $user->id,
-    reason: 'Stock initial'
-);
+        $variant = app(CreateProductVariant::class)->execute([
+            'product_id' => $product->id,
+            'sku' => 'PICKUP-IGNORE-001',
+            'price' => '10000.00',
+            'is_default' => true,
+            'status' => 'ACTIVE',
+        ]);
 
-    $order = app(CreateOrder::class)->execute(
-        customerName: 'Junior Zeumo',
-        customerPhone: '690000001',
-        customerEmail: null,
-        fulfillmentType: 'PICKUP',
-        items: [
-            [
-                'product_variant_id' => $variant->id,
-                'quantity' => 1,
+        app(ReceiveStock::class)->execute(
+            productVariantId: $variant->id,
+            quantity: 10,
+            userId: $user->id,
+            reason: 'Stock initial'
+        );
+
+        $order = app(CreateOrder::class)->execute(
+            customerName: 'Junior Zeumo',
+            customerPhone: '690000001',
+            customerEmail: null,
+            fulfillmentType: 'PICKUP',
+            items: [
+                [
+                    'product_variant_id' => $variant->id,
+                    'quantity' => 1,
+                ],
             ],
-        ],
-        deliveryAddress: 'Une adresse qui doit être ignorée',
-        deliveryArea: 'Bonaberi',
-        deliveryInstructions: 'Appelez-moi',
-    );
+            deliveryAddress: 'Une adresse qui doit être ignorée',
+            deliveryArea: 'Bonaberi',
+            deliveryInstructions: 'Appelez-moi',
+        );
 
-    $this->assertSame('PICKUP', $order->fulfillment_type);
-    $this->assertNull($order->delivery_zone_name);
-    $this->assertNull($order->delivery_city);
-    $this->assertNull($order->delivery_area);
-    $this->assertNull($order->delivery_address);
-    $this->assertNull($order->delivery_instructions);
-    $this->assertSame('0.00', $order->delivery_fee);
-}
+        $this->assertSame('PICKUP', $order->fulfillment_type);
+        $this->assertNull($order->delivery_zone_name);
+        $this->assertNull($order->delivery_city);
+        $this->assertNull($order->delivery_area);
+        $this->assertNull($order->delivery_address);
+        $this->assertNull($order->delivery_instructions);
+        $this->assertSame('0.00', $order->delivery_fee);
+    }
 
-public function test_pending_unpaid_order_can_be_cancelled_and_releases_stock(): void
-{
-    $store = Store::create([
-        'name' => 'Boutique Alpha',
-        'slug' => 'boutique-alpha',
-        'status' => 'ACTIVE',
-    ]);
+    public function test_pending_unpaid_order_can_be_cancelled_and_releases_stock(): void
+    {
+        $store = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'boutique-alpha',
+            'status' => 'ACTIVE',
+        ]);
 
-    $user = User::factory()->create([
-        'store_id' => $store->id,
-    ]);
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+        ]);
 
-    app(TenantContext::class)->setFromUser($user);
+        app(TenantContext::class)->setFromUser($user);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
-    $category = Category::create([
-        'name' => 'Téléphones',
-        'slug' => 'telephones',
-        'status' => 'ACTIVE',
-    ]);
+        $category = Category::create([
+            'name' => 'Téléphones',
+            'slug' => 'telephones',
+            'status' => 'ACTIVE',
+        ]);
 
-    $product = Product::create([
-        'category_id' => $category->id,
-        'name' => 'iPhone 17',
-        'slug' => 'iphone-17',
-        'status' => 'ACTIVE',
-    ]);
+        $product = Product::create([
+            'category_id' => $category->id,
+            'name' => 'iPhone 17',
+            'slug' => 'iphone-17',
+            'status' => 'ACTIVE',
+        ]);
 
-    $variant = app(CreateProductVariant::class)->execute([
-        'product_id' => $product->id,
-        'sku' => 'IPH17-CANCEL',
-        'price' => '10000.00',
-        'is_default' => true,
-        'status' => 'ACTIVE',
-    ]);
+        $variant = app(CreateProductVariant::class)->execute([
+            'product_id' => $product->id,
+            'sku' => 'IPH17-CANCEL',
+            'price' => '10000.00',
+            'is_default' => true,
+            'status' => 'ACTIVE',
+        ]);
 
-    app(ReceiveStock::class)->execute(
-        productVariantId: $variant->id,
-        quantity: 10,
-        userId: $user->id,
-        reason: 'Stock initial'
-    );
+        app(ReceiveStock::class)->execute(
+            productVariantId: $variant->id,
+            quantity: 10,
+            userId: $user->id,
+            reason: 'Stock initial'
+        );
 
-    $order = app(CreateOrder::class)->execute(
-        customerName: 'Jean Client',
-        customerPhone: '690 000 001',
-        customerEmail: null,
-        fulfillmentType: 'PICKUP',
-        items: [
-            [
-                'product_variant_id' => $variant->id,
-                'quantity' => 2,
+        $order = app(CreateOrder::class)->execute(
+            customerName: 'Jean Client',
+            customerPhone: '690 000 001',
+            customerEmail: null,
+            fulfillmentType: 'PICKUP',
+            items: [
+                [
+                    'product_variant_id' => $variant->id,
+                    'quantity' => 2,
+                ],
             ],
-        ],
-    );
+        );
 
-    $reservation = StockReservation::query()
-        ->where('reference_type', 'ORDER')
-        ->where('reference_id', $order->id)
-        ->firstOrFail();
+        $reservation = StockReservation::query()
+            ->where('reference_type', 'ORDER')
+            ->where('reference_id', $order->id)
+            ->firstOrFail();
 
-    $this->assertSame('PENDING', $order->status);
-    $this->assertSame('UNPAID', $order->payment_status);
-    $this->assertSame('ACTIVE', $reservation->status);
+        $this->assertSame('PENDING', $order->status);
+        $this->assertSame('UNPAID', $order->payment_status);
+        $this->assertSame('ACTIVE', $reservation->status);
 
-    $stockLevel = $variant->stockLevel()->firstOrFail();
+        $stockLevel = $variant->stockLevel()->firstOrFail();
 
-    $this->assertSame(10, $stockLevel->physical_quantity);
-    $this->assertSame(2, $stockLevel->reserved_quantity);
+        $this->assertSame(10, $stockLevel->physical_quantity);
+        $this->assertSame(2, $stockLevel->reserved_quantity);
 
-    app(CancelOrder::class)->execute($order->id);
-
-$order->refresh();
-$reservation->refresh();
-$stockLevel->refresh();
-
-$this->assertSame('CANCELLED', $order->status);
-
-$this->assertSame('RELEASED', $reservation->status);
-$this->assertNotNull($reservation->released_at);
-
-$this->assertSame(10, $stockLevel->physical_quantity);
-$this->assertSame(0, $stockLevel->reserved_quantity);
-$this->assertSame(10, $stockLevel->availableQuantity());
-}
-
-public function test_paid_order_cannot_be_cancelled(): void
-{
-    $store = Store::create([
-        'name' => 'Boutique Alpha',
-        'slug' => 'boutique-alpha',
-        'status' => 'ACTIVE',
-    ]);
-
-    $user = User::factory()->create([
-        'store_id' => $store->id,
-    ]);
-
-    app(TenantContext::class)->setFromUser($user);
-
-    $customer = Customer::create([
-        'name' => 'Jean Client',
-        'phone' => '+237690000001',
-    ]);
-
-    $order = Order::create([
-        'customer_id' => $customer->id,
-        'order_number' => 'ZM-CANCEL-PAID',
-        'status' => 'PENDING',
-        'payment_status' => 'PAID',
-        'fulfillment_type' => 'PICKUP',
-        'customer_name' => 'Jean Client',
-        'customer_phone' => '+237690000001',
-        'subtotal' => '10000.00',
-        'discount_amount' => '0.00',
-        'delivery_fee' => '0.00',
-        'total' => '10000.00',
-    ]);
-
-    try {
         app(CancelOrder::class)->execute($order->id);
 
-        $this->fail(
-            'Une commande payée ne devrait pas pouvoir être annulée directement.'
-        );
-    } catch (\Illuminate\Validation\ValidationException $exception) {
-        $this->assertArrayHasKey(
-            'payment_status',
-            $exception->errors()
-        );
+        $order->refresh();
+        $reservation->refresh();
+        $stockLevel->refresh();
+
+        $this->assertSame('CANCELLED', $order->status);
+
+        $this->assertSame('RELEASED', $reservation->status);
+        $this->assertNotNull($reservation->released_at);
+
+        $this->assertSame(10, $stockLevel->physical_quantity);
+        $this->assertSame(0, $stockLevel->reserved_quantity);
+        $this->assertSame(10, $stockLevel->availableQuantity());
     }
 
-    $order->refresh();
+    public function test_paid_order_cannot_be_cancelled(): void
+    {
+        $store = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'boutique-alpha',
+            'status' => 'ACTIVE',
+        ]);
 
-    $this->assertSame('PENDING', $order->status);
-    $this->assertSame('PAID', $order->payment_status);
-}
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+        ]);
 
-public function test_cancelled_order_cannot_be_cancelled_again(): void
-{
-    $store = Store::create([
-        'name' => 'Boutique Alpha',
-        'slug' => 'boutique-alpha',
-        'status' => 'ACTIVE',
-    ]);
+        app(TenantContext::class)->setFromUser($user);
 
-    $user = User::factory()->create([
-        'store_id' => $store->id,
-    ]);
+        $customer = Customer::create([
+            'name' => 'Jean Client',
+            'phone' => '+237690000001',
+        ]);
 
-    app(TenantContext::class)->setFromUser($user);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'order_number' => 'ZM-CANCEL-PAID',
+            'status' => 'PENDING',
+            'payment_status' => 'PAID',
+            'fulfillment_type' => 'PICKUP',
+            'customer_name' => 'Jean Client',
+            'customer_phone' => '+237690000001',
+            'subtotal' => '10000.00',
+            'discount_amount' => '0.00',
+            'delivery_fee' => '0.00',
+            'total' => '10000.00',
+        ]);
 
-    $customer = Customer::create([
-        'name' => 'Jean Client',
-        'phone' => '+237690000001',
-    ]);
+        try {
+            app(CancelOrder::class)->execute($order->id);
 
-    $order = Order::create([
-        'customer_id' => $customer->id,
-        'order_number' => 'ZM-CANCEL-TWICE',
-        'status' => 'CANCELLED',
-        'payment_status' => 'UNPAID',
-        'fulfillment_type' => 'PICKUP',
-        'customer_name' => 'Jean Client',
-        'customer_phone' => '+237690000001',
-        'subtotal' => '10000.00',
-        'discount_amount' => '0.00',
-        'delivery_fee' => '0.00',
-        'total' => '10000.00',
-    ]);
+            $this->fail(
+                'Une commande payée ne devrait pas pouvoir être annulée directement.'
+            );
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey(
+                'payment_status',
+                $exception->errors()
+            );
+        }
 
-    try {
-        app(CancelOrder::class)->execute($order->id);
+        $order->refresh();
 
-        $this->fail(
-            'Une commande déjà annulée ne devrait pas pouvoir être annulée une deuxième fois.'
-        );
-    } catch (\Illuminate\Validation\ValidationException $exception) {
-        $this->assertArrayHasKey(
-            'status',
-            $exception->errors()
-        );
+        $this->assertSame('PENDING', $order->status);
+        $this->assertSame('PAID', $order->payment_status);
     }
 
-    $order->refresh();
+    public function test_cancelled_order_cannot_be_cancelled_again(): void
+    {
+        $store = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'boutique-alpha',
+            'status' => 'ACTIVE',
+        ]);
 
-    $this->assertSame('CANCELLED', $order->status);
-    $this->assertSame('UNPAID', $order->payment_status);
-}
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+        ]);
 
-public function test_order_cannot_be_cancelled_from_another_store(): void
-{
-    $storeA = Store::create([
-        'name' => 'Boutique Alpha',
-        'slug' => 'boutique-alpha',
-        'status' => 'ACTIVE',
-    ]);
+        app(TenantContext::class)->setFromUser($user);
 
-    $storeB = Store::create([
-        'name' => 'Boutique Beta',
-        'slug' => 'boutique-beta',
-        'status' => 'ACTIVE',
-    ]);
+        $customer = Customer::create([
+            'name' => 'Jean Client',
+            'phone' => '+237690000001',
+        ]);
 
-    $userA = User::factory()->create([
-        'store_id' => $storeA->id,
-    ]);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'order_number' => 'ZM-CANCEL-TWICE',
+            'status' => 'CANCELLED',
+            'payment_status' => 'UNPAID',
+            'fulfillment_type' => 'PICKUP',
+            'customer_name' => 'Jean Client',
+            'customer_phone' => '+237690000001',
+            'subtotal' => '10000.00',
+            'discount_amount' => '0.00',
+            'delivery_fee' => '0.00',
+            'total' => '10000.00',
+        ]);
 
-    $userB = User::factory()->create([
-        'store_id' => $storeB->id,
-    ]);
+        try {
+            app(CancelOrder::class)->execute($order->id);
 
-    // Création de la commande dans la boutique B.
-    app(TenantContext::class)->setFromUser($userB);
+            $this->fail(
+                'Une commande déjà annulée ne devrait pas pouvoir être annulée une deuxième fois.'
+            );
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey(
+                'status',
+                $exception->errors()
+            );
+        }
 
-    $customerB = Customer::create([
-        'name' => 'Client Beta',
-        'phone' => '+237690000001',
-    ]);
+        $order->refresh();
 
-    $orderB = Order::create([
-        'customer_id' => $customerB->id,
-        'order_number' => 'ZM-CANCEL-STORE-B',
-        'status' => 'PENDING',
-        'payment_status' => 'UNPAID',
-        'fulfillment_type' => 'PICKUP',
-        'customer_name' => 'Client Beta',
-        'customer_phone' => '+237690000001',
-        'subtotal' => '10000.00',
-        'discount_amount' => '0.00',
-        'delivery_fee' => '0.00',
-        'total' => '10000.00',
-    ]);
-
-    // On passe maintenant dans la boutique A.
-    app(TenantContext::class)->setFromUser($userA);
-
-    try {
-        app(CancelOrder::class)->execute($orderB->id);
-
-        $this->fail(
-            'Une boutique ne devrait pas pouvoir annuler la commande d’une autre boutique.'
-        );
-    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $exception) {
-        $this->assertSame(
-            Order::class,
-            $exception->getModel()
-        );
+        $this->assertSame('CANCELLED', $order->status);
+        $this->assertSame('UNPAID', $order->payment_status);
     }
 
-    // Vérification depuis le tenant propriétaire.
-    app(TenantContext::class)->setFromUser($userB);
+    public function test_order_cannot_be_cancelled_from_another_store(): void
+    {
+        $storeA = Store::create([
+            'name' => 'Boutique Alpha',
+            'slug' => 'boutique-alpha',
+            'status' => 'ACTIVE',
+        ]);
 
-    $orderB->refresh();
+        $storeB = Store::create([
+            'name' => 'Boutique Beta',
+            'slug' => 'boutique-beta',
+            'status' => 'ACTIVE',
+        ]);
 
-    $this->assertSame('PENDING', $orderB->status);
-    $this->assertSame('UNPAID', $orderB->payment_status);
-}
+        $userA = User::factory()->create([
+            'store_id' => $storeA->id,
+        ]);
 
-public function test_pending_unpaid_order_expires_after_reservation_deadline(): void
-{
-    $store = Store::create([
-        'name' => 'Boutique Expiration',
-        'slug' => 'boutique-expiration',
-        'status' => 'ACTIVE',
-    ]);
+        $userB = User::factory()->create([
+            'store_id' => $storeB->id,
+        ]);
 
-    $user = User::factory()->create([
-        'store_id' => $store->id,
-    ]);
+        // Création de la commande dans la boutique B.
+        app(TenantContext::class)->setFromUser($userB);
 
-    app(TenantContext::class)->setFromUser($user);
+        $customerB = Customer::create([
+            'name' => 'Client Beta',
+            'phone' => '+237690000001',
+        ]);
 
-    $category = Category::create([
-        'name' => 'Téléphones',
-        'slug' => 'telephones-expiration',
-        'status' => 'ACTIVE',
-    ]);
+        $orderB = Order::create([
+            'customer_id' => $customerB->id,
+            'order_number' => 'ZM-CANCEL-STORE-B',
+            'status' => 'PENDING',
+            'payment_status' => 'UNPAID',
+            'fulfillment_type' => 'PICKUP',
+            'customer_name' => 'Client Beta',
+            'customer_phone' => '+237690000001',
+            'subtotal' => '10000.00',
+            'discount_amount' => '0.00',
+            'delivery_fee' => '0.00',
+            'total' => '10000.00',
+        ]);
 
-    $product = Product::create([
-        'category_id' => $category->id,
-        'name' => 'Téléphone Expiration',
-        'slug' => 'telephone-expiration',
-        'status' => 'ACTIVE',
-    ]);
+        // On passe maintenant dans la boutique A.
+        app(TenantContext::class)->setFromUser($userA);
 
-    $variant = app(CreateProductVariant::class)->execute([
-        'product_id' => $product->id,
-        'sku' => 'EXPIRATION-001',
-        'price' => '10000.00',
-        'is_default' => true,
-        'status' => 'ACTIVE',
-    ]);
+        try {
+            app(CancelOrder::class)->execute($orderB->id);
 
-    app(ReceiveStock::class)->execute(
-        productVariantId: $variant->id,
-        quantity: 10,
-        userId: $user->id,
-        reason: 'Stock initial'
-    );
+            $this->fail(
+                'Une boutique ne devrait pas pouvoir annuler la commande d’une autre boutique.'
+            );
+        } catch (ModelNotFoundException $exception) {
+            $this->assertSame(
+                Order::class,
+                $exception->getModel()
+            );
+        }
 
-    $order = app(CreateOrder::class)->execute(
-        customerName: 'Jean Client',
-        customerPhone: '690 000 001',
-        customerEmail: null,
-        fulfillmentType: 'PICKUP',
-        items: [
-            [
-                'product_variant_id' => $variant->id,
-                'quantity' => 2,
+        // Vérification depuis le tenant propriétaire.
+        app(TenantContext::class)->setFromUser($userB);
+
+        $orderB->refresh();
+
+        $this->assertSame('PENDING', $orderB->status);
+        $this->assertSame('UNPAID', $orderB->payment_status);
+    }
+
+    public function test_pending_unpaid_order_expires_after_reservation_deadline(): void
+    {
+        $store = Store::create([
+            'name' => 'Boutique Expiration',
+            'slug' => 'boutique-expiration',
+            'status' => 'ACTIVE',
+        ]);
+
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+        ]);
+
+        app(TenantContext::class)->setFromUser($user);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
+
+        $category = Category::create([
+            'name' => 'Téléphones',
+            'slug' => 'telephones-expiration',
+            'status' => 'ACTIVE',
+        ]);
+
+        $product = Product::create([
+            'category_id' => $category->id,
+            'name' => 'Téléphone Expiration',
+            'slug' => 'telephone-expiration',
+            'status' => 'ACTIVE',
+        ]);
+
+        $variant = app(CreateProductVariant::class)->execute([
+            'product_id' => $product->id,
+            'sku' => 'EXPIRATION-001',
+            'price' => '10000.00',
+            'is_default' => true,
+            'status' => 'ACTIVE',
+        ]);
+
+        app(ReceiveStock::class)->execute(
+            productVariantId: $variant->id,
+            quantity: 10,
+            userId: $user->id,
+            reason: 'Stock initial'
+        );
+
+        $order = app(CreateOrder::class)->execute(
+            customerName: 'Jean Client',
+            customerPhone: '690 000 001',
+            customerEmail: null,
+            fulfillmentType: 'PICKUP',
+            items: [
+                [
+                    'product_variant_id' => $variant->id,
+                    'quantity' => 2,
+                ],
             ],
-        ],
-    );
+        );
 
-    $reservation = $variant->stockReservations()
-        ->where('reference_type', 'ORDER')
-        ->where('reference_id', $order->id)
-        ->firstOrFail();
+        $reservation = $variant->stockReservations()
+            ->where('reference_type', 'ORDER')
+            ->where('reference_id', $order->id)
+            ->firstOrFail();
 
-    $this->assertSame('PENDING', $order->status);
-    $this->assertSame('UNPAID', $order->payment_status);
-    $this->assertSame('ACTIVE', $reservation->status);
+        $this->assertSame('PENDING', $order->status);
+        $this->assertSame('UNPAID', $order->payment_status);
+        $this->assertSame('ACTIVE', $reservation->status);
 
-    $this->travel(31)->minutes();
+        $this->travel(31)->minutes();
 
-    app(ExpireOrder::class)->execute($order->id);
-
-    $order->refresh();
-    $reservation->refresh();
-
-    $stockLevel = $variant->stockLevel()->firstOrFail();
-
-    $this->assertSame('CANCELLED', $order->status);
-
-    $this->assertSame('EXPIRED', $reservation->status);
-    $this->assertNotNull($reservation->released_at);
-
-    $this->assertSame(10, $stockLevel->physical_quantity);
-    $this->assertSame(0, $stockLevel->reserved_quantity);
-    $this->assertSame(10, $stockLevel->availableQuantity());
-}
-
-public function test_pending_unpaid_order_cannot_expire_before_reservation_deadline(): void
-{
-    $store = Store::create([
-        'name' => 'Boutique Expiration Early',
-        'slug' => 'boutique-expiration-early',
-        'status' => 'ACTIVE',
-    ]);
-
-    $user = User::factory()->create([
-        'store_id' => $store->id,
-    ]);
-
-    app(TenantContext::class)->setFromUser($user);
-
-    $category = Category::create([
-        'name' => 'Téléphones',
-        'slug' => 'telephones-expiration-early',
-        'status' => 'ACTIVE',
-    ]);
-
-    $product = Product::create([
-        'category_id' => $category->id,
-        'name' => 'Téléphone Expiration Early',
-        'slug' => 'telephone-expiration-early',
-        'status' => 'ACTIVE',
-    ]);
-
-    $variant = app(CreateProductVariant::class)->execute([
-        'product_id' => $product->id,
-        'sku' => 'EXPIRATION-EARLY-001',
-        'price' => '10000.00',
-        'is_default' => true,
-        'status' => 'ACTIVE',
-    ]);
-
-    app(ReceiveStock::class)->execute(
-        productVariantId: $variant->id,
-        quantity: 10,
-        userId: $user->id,
-        reason: 'Stock initial'
-    );
-
-    $order = app(CreateOrder::class)->execute(
-        customerName: 'Jean Client',
-        customerPhone: '690 000 002',
-        customerEmail: null,
-        fulfillmentType: 'PICKUP',
-        items: [
-            [
-                'product_variant_id' => $variant->id,
-                'quantity' => 2,
-            ],
-        ],
-    );
-
-    $reservation = $variant->stockReservations()
-        ->where('reference_type', 'ORDER')
-        ->where('reference_id', $order->id)
-        ->firstOrFail();
-
-    $this->travel(29)->minutes();
-
-try {
-    app(ExpireOrder::class)->execute($order->id);
-
-    $this->fail(
-        'La commande ne devait pas pouvoir expirer avant son délai.'
-    );
-} catch (ValidationException $exception) {
-    $this->assertArrayHasKey(
-        'reservation_expires_at',
-        $exception->errors()
-    );
-}
-
-$order->refresh();
-$reservation->refresh();
-
-$stockLevel = $variant->stockLevel()->firstOrFail();
-
-$this->assertSame('PENDING', $order->status);
-$this->assertSame('UNPAID', $order->payment_status);
-
-$this->assertSame('ACTIVE', $reservation->status);
-$this->assertNull($reservation->released_at);
-
-$this->assertSame(10, $stockLevel->physical_quantity);
-$this->assertSame(2, $stockLevel->reserved_quantity);
-$this->assertSame(8, $stockLevel->availableQuantity());
-
-    
-}
-
-public function test_paid_order_cannot_expire(): void
-{
-    $store = Store::create([
-        'name' => 'Boutique Paid Expiration',
-        'slug' => 'boutique-paid-expiration',
-        'status' => 'ACTIVE',
-    ]);
-
-    $user = User::factory()->create([
-        'store_id' => $store->id,
-    ]);
-
-    app(TenantContext::class)->setFromUser($user);
-
-    $customer = Customer::create([
-        'name' => 'Client Paid',
-        'phone' => '+237690000003',
-    ]);
-
-    $order = Order::create([
-        'customer_id' => $customer->id,
-        'order_number' => 'ZM-PAID-EXPIRATION',
-        'status' => 'PENDING',
-        'payment_status' => 'PAID',
-        'fulfillment_type' => 'PICKUP',
-        'customer_name' => 'Client Paid',
-        'customer_phone' => '+237690000003',
-        'subtotal' => '10000.00',
-        'discount_amount' => '0.00',
-        'delivery_fee' => '0.00',
-        'total' => '10000.00',
-        'reservation_expires_at' => now()->subMinute(),
-    ]);
-
-    try {
         app(ExpireOrder::class)->execute($order->id);
 
-        $this->fail(
-            'Une commande payée ne devait pas pouvoir expirer.'
-        );
-    } catch (ValidationException $exception) {
-        $this->assertArrayHasKey(
-            'payment_status',
-            $exception->errors()
-        );
+        $order->refresh();
+        $reservation->refresh();
+
+        $stockLevel = $variant->stockLevel()->firstOrFail();
+
+        $this->assertSame('CANCELLED', $order->status);
+
+        $this->assertSame('EXPIRED', $reservation->status);
+        $this->assertNotNull($reservation->released_at);
+
+        $this->assertSame(10, $stockLevel->physical_quantity);
+        $this->assertSame(0, $stockLevel->reserved_quantity);
+        $this->assertSame(10, $stockLevel->availableQuantity());
     }
 
-    $order->refresh();
+    public function test_pending_unpaid_order_cannot_expire_before_reservation_deadline(): void
+    {
+        $store = Store::create([
+            'name' => 'Boutique Expiration Early',
+            'slug' => 'boutique-expiration-early',
+            'status' => 'ACTIVE',
+        ]);
 
-    $this->assertSame('PENDING', $order->status);
-    $this->assertSame('PAID', $order->payment_status);
-}
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+        ]);
 
-public function test_order_cannot_be_expired_from_another_store(): void
-{
-    $storeA = Store::create([
-        'name' => 'Boutique Expiration Alpha',
-        'slug' => 'boutique-expiration-alpha',
-        'status' => 'ACTIVE',
-    ]);
+        app(TenantContext::class)->setFromUser($user);
+        StoreSetting::firstOrCreate([], ['pickup_enabled' => true, 'delivery_enabled' => true, 'reservation_duration_minutes' => 30]);
 
-    $storeB = Store::create([
-        'name' => 'Boutique Expiration Beta',
-        'slug' => 'boutique-expiration-beta',
-        'status' => 'ACTIVE',
-    ]);
+        $category = Category::create([
+            'name' => 'Téléphones',
+            'slug' => 'telephones-expiration-early',
+            'status' => 'ACTIVE',
+        ]);
 
-    $userA = User::factory()->create([
-        'store_id' => $storeA->id,
-    ]);
+        $product = Product::create([
+            'category_id' => $category->id,
+            'name' => 'Téléphone Expiration Early',
+            'slug' => 'telephone-expiration-early',
+            'status' => 'ACTIVE',
+        ]);
 
-    $userB = User::factory()->create([
-        'store_id' => $storeB->id,
-    ]);
+        $variant = app(CreateProductVariant::class)->execute([
+            'product_id' => $product->id,
+            'sku' => 'EXPIRATION-EARLY-001',
+            'price' => '10000.00',
+            'is_default' => true,
+            'status' => 'ACTIVE',
+        ]);
 
-    // Création de la commande dans la boutique B.
-    app(TenantContext::class)->setFromUser($userB);
-
-    $customerB = Customer::create([
-        'name' => 'Client Beta',
-        'phone' => '+237690000004',
-    ]);
-
-    $orderB = Order::create([
-        'customer_id' => $customerB->id,
-        'order_number' => 'ZM-EXPIRE-STORE-B',
-        'status' => 'PENDING',
-        'payment_status' => 'UNPAID',
-        'fulfillment_type' => 'PICKUP',
-        'customer_name' => 'Client Beta',
-        'customer_phone' => '+237690000004',
-        'subtotal' => '10000.00',
-        'discount_amount' => '0.00',
-        'delivery_fee' => '0.00',
-        'total' => '10000.00',
-        'reservation_expires_at' => now()->subMinute(),
-    ]);
-
-    // On passe dans la boutique A.
-    app(TenantContext::class)->setFromUser($userA);
-
-    try {
-        app(ExpireOrder::class)->execute($orderB->id);
-
-        $this->fail(
-            'Une boutique ne devrait pas pouvoir faire expirer la commande d’une autre boutique.'
+        app(ReceiveStock::class)->execute(
+            productVariantId: $variant->id,
+            quantity: 10,
+            userId: $user->id,
+            reason: 'Stock initial'
         );
-    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $exception) {
-        $this->assertSame(
-            Order::class,
-            $exception->getModel()
+
+        $order = app(CreateOrder::class)->execute(
+            customerName: 'Jean Client',
+            customerPhone: '690 000 002',
+            customerEmail: null,
+            fulfillmentType: 'PICKUP',
+            items: [
+                [
+                    'product_variant_id' => $variant->id,
+                    'quantity' => 2,
+                ],
+            ],
         );
+
+        $reservation = $variant->stockReservations()
+            ->where('reference_type', 'ORDER')
+            ->where('reference_id', $order->id)
+            ->firstOrFail();
+
+        $this->travel(29)->minutes();
+
+        try {
+            app(ExpireOrder::class)->execute($order->id);
+
+            $this->fail(
+                'La commande ne devait pas pouvoir expirer avant son délai.'
+            );
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey(
+                'reservation_expires_at',
+                $exception->errors()
+            );
+        }
+
+        $order->refresh();
+        $reservation->refresh();
+
+        $stockLevel = $variant->stockLevel()->firstOrFail();
+
+        $this->assertSame('PENDING', $order->status);
+        $this->assertSame('UNPAID', $order->payment_status);
+
+        $this->assertSame('ACTIVE', $reservation->status);
+        $this->assertNull($reservation->released_at);
+
+        $this->assertSame(10, $stockLevel->physical_quantity);
+        $this->assertSame(2, $stockLevel->reserved_quantity);
+        $this->assertSame(8, $stockLevel->availableQuantity());
+
     }
 
-    // Vérification depuis la boutique propriétaire.
-    app(TenantContext::class)->setFromUser($userB);
+    public function test_paid_order_cannot_expire(): void
+    {
+        $store = Store::create([
+            'name' => 'Boutique Paid Expiration',
+            'slug' => 'boutique-paid-expiration',
+            'status' => 'ACTIVE',
+        ]);
 
-    $orderB->refresh();
+        $user = User::factory()->create([
+            'store_id' => $store->id,
+        ]);
 
-    $this->assertSame('PENDING', $orderB->status);
-    $this->assertSame('UNPAID', $orderB->payment_status);
-}
+        app(TenantContext::class)->setFromUser($user);
 
+        $customer = Customer::create([
+            'name' => 'Client Paid',
+            'phone' => '+237690000003',
+        ]);
+
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'order_number' => 'ZM-PAID-EXPIRATION',
+            'status' => 'PENDING',
+            'payment_status' => 'PAID',
+            'fulfillment_type' => 'PICKUP',
+            'customer_name' => 'Client Paid',
+            'customer_phone' => '+237690000003',
+            'subtotal' => '10000.00',
+            'discount_amount' => '0.00',
+            'delivery_fee' => '0.00',
+            'total' => '10000.00',
+            'reservation_expires_at' => now()->subMinute(),
+        ]);
+
+        try {
+            app(ExpireOrder::class)->execute($order->id);
+
+            $this->fail(
+                'Une commande payée ne devait pas pouvoir expirer.'
+            );
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey(
+                'payment_status',
+                $exception->errors()
+            );
+        }
+
+        $order->refresh();
+
+        $this->assertSame('PENDING', $order->status);
+        $this->assertSame('PAID', $order->payment_status);
+    }
+
+    public function test_order_cannot_be_expired_from_another_store(): void
+    {
+        $storeA = Store::create([
+            'name' => 'Boutique Expiration Alpha',
+            'slug' => 'boutique-expiration-alpha',
+            'status' => 'ACTIVE',
+        ]);
+
+        $storeB = Store::create([
+            'name' => 'Boutique Expiration Beta',
+            'slug' => 'boutique-expiration-beta',
+            'status' => 'ACTIVE',
+        ]);
+
+        $userA = User::factory()->create([
+            'store_id' => $storeA->id,
+        ]);
+
+        $userB = User::factory()->create([
+            'store_id' => $storeB->id,
+        ]);
+
+        // Création de la commande dans la boutique B.
+        app(TenantContext::class)->setFromUser($userB);
+
+        $customerB = Customer::create([
+            'name' => 'Client Beta',
+            'phone' => '+237690000004',
+        ]);
+
+        $orderB = Order::create([
+            'customer_id' => $customerB->id,
+            'order_number' => 'ZM-EXPIRE-STORE-B',
+            'status' => 'PENDING',
+            'payment_status' => 'UNPAID',
+            'fulfillment_type' => 'PICKUP',
+            'customer_name' => 'Client Beta',
+            'customer_phone' => '+237690000004',
+            'subtotal' => '10000.00',
+            'discount_amount' => '0.00',
+            'delivery_fee' => '0.00',
+            'total' => '10000.00',
+            'reservation_expires_at' => now()->subMinute(),
+        ]);
+
+        // On passe dans la boutique A.
+        app(TenantContext::class)->setFromUser($userA);
+
+        try {
+            app(ExpireOrder::class)->execute($orderB->id);
+
+            $this->fail(
+                'Une boutique ne devrait pas pouvoir faire expirer la commande d’une autre boutique.'
+            );
+        } catch (ModelNotFoundException $exception) {
+            $this->assertSame(
+                Order::class,
+                $exception->getModel()
+            );
+        }
+
+        // Vérification depuis la boutique propriétaire.
+        app(TenantContext::class)->setFromUser($userB);
+
+        $orderB->refresh();
+
+        $this->assertSame('PENDING', $orderB->status);
+        $this->assertSame('UNPAID', $orderB->payment_status);
+    }
 }

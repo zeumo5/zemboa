@@ -1,61 +1,69 @@
 <?php
-namespace App\Http\Controllers\Admin;
 
+namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Store;
 use App\Models\User;
 use App\Notifications\OwnerInvitationNotification;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Password;
 
 class SendOwnerInvitationController extends Controller
 {
-    public function __invoke(int $storeId): JsonResponse
+    public function __invoke(Request $request, int $storeId): JsonResponse|RedirectResponse
     {
-        $store = Store::query()->findOrFail($storeId);
+        [$store, $owner, $token] = DB::transaction(function () use ($storeId): array {
+            $store = Store::query()->whereKey($storeId)->lockForUpdate()->firstOrFail();
 
-        // Aucune invitation pour une boutique suspendue.
-        if (! in_array(
-            $store->status,
-            ['PENDING', 'ACTIVE'],
-            true
-        )) {
-            abort(409, 'Boutique non autorisée.');
-        }
+            // Aucune invitation pour une boutique suspendue.
+            if (! in_array(
+                $store->status,
+                ['PENDING', 'ACTIVE'],
+                true
+            )) {
+                abort(409, 'Boutique non autorisée.');
+            }
 
-        // Trouver les propriétaires rattachés
-        // exclusivement à cette boutique.
-        $owners = User::query()
-            ->where('store_id', $store->id)
-            ->whereHas('roles', function ($query) {
-                $query->where('code', 'STORE_OWNER');
-            })
-            ->limit(2)
-            ->get();
+            // Trouver les propriétaires rattachés
+            // exclusivement à cette boutique.
+            $owners = User::query()
+                ->where('store_id', $store->id)
+                ->whereHas('roles', function ($query) {
+                    $query->where('code', 'STORE_OWNER');
+                })
+                ->limit(2)
+                ->lockForUpdate()
+                ->get();
 
-        // Une boutique doit avoir exactement
-        // un propriétaire dans ce parcours.
-        if ($owners->count() !== 1) {
-            abort(409, 'Propriétaire unique requis.');
-        }
+            // Une boutique doit avoir exactement
+            // un propriétaire dans ce parcours.
+            if ($owners->count() !== 1) {
+                abort(409, 'Propriétaire unique requis.');
+            }
 
-        $owner = $owners->first();
+            $owner = $owners->first();
 
-        if (
-            $owner->status !== 'INVITED' ||
-            $owner->email_verified_at !== null ||
-            $owner->roles()
-                ->where('code', '!=', 'STORE_OWNER')
-                ->exists()
-        ) {
-            abort(409, 'Invitation non autorisée.');
-        }
+            if (
+                $owner->status !== 'INVITED' ||
+                $owner->email_verified_at !== null ||
+                $owner->roles()
+                    ->where('code', '!=', 'STORE_OWNER')
+                    ->exists()
+            ) {
+                abort(409, 'Invitation non autorisée.');
+            }
 
-        // Le jeton est conservé sous forme hachée
-        // par le Password Broker de Laravel.
-        $token = Password::broker('users')
-            ->createToken($owner);
+            // Le jeton est conservé sous forme hachée
+            // par le Password Broker de Laravel.
+            $token = Password::broker('users')
+                ->createToken($owner);
+
+            return [$store, $owner, $token];
+        });
 
         // Envoyer la notification au propriétaire.
         $owner->notify(
@@ -64,6 +72,10 @@ class SendOwnerInvitationController extends Controller
                 $store->name
             )
         );
+
+        if (! $request->expectsJson()) {
+            return redirect()->route('admin.stores.show', ['storeId' => $store->id])->with('success', __('admin.invitation_sent'));
+        }
 
         return response()->json([
             'message' => 'Invitation envoyée au propriétaire.',

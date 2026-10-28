@@ -2,44 +2,33 @@
 <?php
 
 return [
-    'cart_empty' =>
-        'Votre panier est vide.',
+    'amount_invalid' => 'Un montant est invalide. Contactez la boutique.',
+    'amount_limit' => 'Le montant dépasse la limite autorisée. Réduisez la quantité ou contactez la boutique.',
+    'delivery_fee_required' => 'La livraison exige des frais valides strictement positifs. Choisissez une autre zone ou contactez la boutique.',
+    'cart_empty' => 'Votre panier est vide.',
 
-    'items_unavailable' =>
-        'Certains articles ne sont plus disponibles. Vérifiez votre panier.',
+    'items_unavailable' => 'Certains articles ne sont plus disponibles. Vérifiez votre panier.',
 
-    'created_successfully' =>
-        'Commande créée avec succès.',
+    'created_successfully' => 'Commande créée avec succès.',
 
-        
-'fulfillment_invalid' =>
-    'Le type de livraison doit être PICKUP ou DELIVERY.',
+    'fulfillment_invalid' => 'Le type de livraison doit être PICKUP ou DELIVERY.',
 
-'delivery_zone_required' =>
-    'Une zone de livraison est obligatoire pour une livraison.',
+    'delivery_zone_required' => 'Une zone de livraison est obligatoire pour une livraison.',
 
-'delivery_address_required' =>
-    'Une adresse de livraison est obligatoire.',
+    'delivery_address_required' => 'Une adresse de livraison est obligatoire.',
 
-'items_required' =>
-    'La commande doit contenir au moins un article.',
+    'items_required' => 'La commande doit contenir au moins un article.',
 
-'variant_invalid' =>
-    'Chaque article doit contenir une variante valide.',
+    'variant_invalid' => 'Chaque article doit contenir une variante valide.',
 
-'quantity_invalid' =>
-    'La quantité doit être un entier strictement positif.',
+    'quantity_invalid' => 'La quantité doit être un entier strictement positif.',
 
-'delivery_disabled' =>
-    'La livraison est désactivée pour cette boutique.',
+    'delivery_disabled' => 'La livraison est désactivée pour cette boutique.',
 
-'pickup_disabled' =>
-    'Le retrait en boutique est désactivé.',
+    'pickup_disabled' => 'Le retrait en boutique est désactivé.',
 
-'variant_unavailable' =>
-    'Cette variante de produit n’est pas disponible à la vente.',
+    'variant_unavailable' => 'Cette variante de produit n’est pas disponible à la vente.',
 
-'product_unavailable' =>
-    'Ce produit n’est pas disponible à la vente.',
+    'product_unavailable' => 'Ce produit n’est pas disponible à la vente.',
 
 ];

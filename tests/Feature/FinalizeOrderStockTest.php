@@ -2,26 +2,26 @@
 
 namespace Tests\Feature;
 
-
-use App\Actions\Payments\FinalizeOrderPayment;
-use App\Models\Order;
-use Illuminate\Support\Facades\DB;
 use App\Actions\Orders\CreateOrder;
-use App\Actions\ProductVariant\CreateProductVariant;
 use App\Actions\Payments\ConfirmPayment;
+use App\Actions\Payments\FinalizeOrderPayment;
+use App\Actions\ProductVariant\CreateProductVariant;
 use App\Actions\Stock\CreateStockReservation;
 use App\Actions\Stock\ReceiveStock;
 use App\Actions\Stock\ReleaseStockReservation;
 use App\Models\Category;
+use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Permission;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\StockReservation;
 use App\Models\Store;
+use App\Models\StoreSetting;
 use App\Models\User;
 use App\Support\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -43,6 +43,7 @@ class FinalizeOrderStockTest extends TestCase
         ]);
 
         app(TenantContext::class)->setFromUser($user);
+        StoreSetting::create(['pickup_enabled' => true]);
         $this->actingAs($user);
 
         // 2. Autoriser le caissier à confirmer les paiements.
@@ -110,7 +111,6 @@ class FinalizeOrderStockTest extends TestCase
 
         $this->assertSame('10000.00', $order->total);
 
-        
         // Vérifier qu'une réservation correcte est acceptée.
         // CreateOrder a déjà réservé les 5 articles.
 
@@ -133,7 +133,6 @@ class FinalizeOrderStockTest extends TestCase
                 ->where('status', 'ACTIVE')
                 ->sum('quantity')
         );
-
 
         // 6. Retirer la réservation initiale de 5 articles.
         $originalReservation = StockReservation::query()
@@ -158,7 +157,6 @@ class FinalizeOrderStockTest extends TestCase
         $this->assertSame(10, $stockBefore->physical_quantity);
         $this->assertSame(3, $stockBefore->reserved_quantity);
 
-        
         // Vérifier directement notre nouvelle méthode.
         // La commande doit être verrouillée en premier.
         try {
@@ -181,7 +179,6 @@ class FinalizeOrderStockTest extends TestCase
                 $exception->errors()
             );
         }
-
 
         // 8. Créer un paiement intégral de 10 000 FCFA.
         $payment = Payment::create([

@@ -1,0 +1,2 @@
+@php($image=$variant?->product?->relationLoaded('images')?$variant->product->images->first():null)
+<div class="iv-product">@if($image)<img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($image->path) }}" alt="" loading="lazy">@else<span class="iv-placeholder" aria-hidden="true">◇</span>@endif<div><strong>{{ $variant?->product?->name??__('inventory.unnamed') }}</strong><small>{{ $variant?->sku??'—' }}</small></div></div>

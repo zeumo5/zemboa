@@ -1,6 +1,6 @@
 <?php
-namespace App\Notifications;
 
+namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -10,9 +10,7 @@ class EmployeeInvitationNotification extends Notification
 {
     use Queueable;
 
-    public function __construct(
-        private readonly string $token
-    ) {}
+    public function __construct(private readonly string $token) {}
 
     public function via(object $notifiable): array
     {
@@ -21,24 +19,10 @@ class EmployeeInvitationNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $url = route('employee.invitation.form', [
-            'token' => $this->token,
-            'email' => $notifiable->email,
-        ]);
+        $url = route('employee.invitation.form', ['token' => $this->token, 'email' => $notifiable->email]);
 
-        return (new MailMessage)
-            ->subject('Invitation à rejoindre ZEMBOA')
-            ->greeting('Bienvenue sur ZEMBOA !')
-            ->line(
-                'Vous avez été invité à rejoindre une équipe sur ZEMBOA.'
-            )
-            ->line(
-                'Cliquez sur le bouton ci-dessous pour définir votre mot de passe.'
-            )
-            ->action('Activer mon compte', $url)
-            ->line('Ce lien expire après 60 minutes.')
-            ->line(
-                'Si vous ne connaissez pas cette invitation, ignorez cet e-mail.'
-            );
+        return (new MailMessage)->subject(__('team.mail_subject'))->greeting(__('team.mail_greeting'))
+            ->line(__('team.mail_intro'))->line(__('team.mail_action'))->action(__('team.activate'), $url)
+            ->line(__('team.mail_expiry', ['minutes' => config('auth.passwords.users.expire')]))->line(__('team.mail_ignore'));
     }
 }

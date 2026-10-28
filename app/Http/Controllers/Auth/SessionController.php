@@ -1,9 +1,10 @@
 <?php
-namespace App\Http\Controllers\Auth;
 
+namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\AccountDestination;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,7 +34,7 @@ class SessionController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $authenticated = Auth::attempt([
+        $authenticated = Auth::guard('web')->attempt([
             'email' => $credentials['email'],
             'password' => $credentials['password'],
             'status' => 'ACTIVE',
@@ -41,11 +42,11 @@ class SessionController extends Controller
 
         if (! $authenticated) {
             throw ValidationException::withMessages([
-                'email' => 'Identifiants incorrects.',
+                'email' => __('access.invalid_credentials'),
             ]);
         }
 
-        $user = $request->user();
+        $user = $request->user('web');
 
         $isStoreUser =
             $user instanceof User &&
@@ -69,15 +70,16 @@ class SessionController extends Controller
 
         if (
             ! $isStoreUser ||
-            ($isEmployee && $user->email_verified_at === null)
+            ($isEmployee && $user->email_verified_at === null) ||
+            ($user instanceof User && ! AccountDestination::professionalIdentity($user))
         ) {
-            Auth::logout();
+            Auth::guard('web')->logout();
 
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
             throw ValidationException::withMessages([
-                'email' => 'Connexion non autorisée.',
+                'email' => __('access.access_denied'),
             ]);
         }
 
@@ -94,14 +96,30 @@ class SessionController extends Controller
             ]);
         }
 
-        return redirect()->intended(
-            route('account.show')
-        );
+        $request->session()->forget('url.intended');
+        $destination = AccountDestination::professionalRoute($user);
+        abort_unless($destination !== null, 403);
+
+        return redirect()->route($destination);
     }
 
-    public function me(Request $request): JsonResponse
+    public function me(Request $request): JsonResponse|RedirectResponse
     {
-        $user = $request->user();
+        $user = $request->user('web');
+        if ($user === null) {
+            if ($request->expectsJson()) {
+                abort(401);
+            }
+
+            return redirect()->route(auth('buyer')->user()?->canUseBuyerAccount() ? 'buyer.account' : 'login');
+        }
+        $destination = AccountDestination::professionalRoute($user);
+        abort_unless(AccountDestination::professionalIdentity($user), 403);
+        if (! $request->expectsJson()) {
+            abort_unless($destination !== null, 403);
+
+            return redirect()->route($destination);
+        }
 
         return response()->json([
             'id' => $user->id,
@@ -116,7 +134,7 @@ class SessionController extends Controller
     public function destroy(
         Request $request
     ): JsonResponse|RedirectResponse {
-        Auth::logout();
+        Auth::guard('web')->logout();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();

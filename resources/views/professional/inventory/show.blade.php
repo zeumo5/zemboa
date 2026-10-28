@@ -1,0 +1,10 @@
+@extends('professional.layout')
+@section('title',__('inventory.detail'))
+@section('content')
+<a class="pc-link" href="{{ route('professional.inventory.index') }}">← {{ __('inventory.back') }}</a><div class="pc-heading"><div><h1>{{ $stockLevel->productVariant?->product?->name??__('inventory.detail') }}</h1><p>{{ $stockLevel->productVariant?->sku }}</p></div></div>
+@include('professional.inventory.nav') @include('professional.catalog.feedback')
+<div class="iv-statistics">@foreach(['physical_quantity'=>'physical','reserved_quantity'=>'reserved','availableQuantity'=>'available','low_stock_threshold'=>'threshold'] as $field=>$label)<div class="pro-panel"><small>{{ __('inventory.'.$label) }}</small><strong>{{ $field==='availableQuantity'?$stockLevel->availableQuantity():$stockLevel->$field }}</strong></div>@endforeach</div>
+<section class="pro-panel pc-form"><h2>{{ __('inventory.detail') }}</h2><p class="pc-note">{{ $stockLevel->productVariant?->product?->category?->name }}</p><p class="pc-note">{{ $stockLevel->productVariant?->attributeValues->map(fn($value)=>$value->attribute?->name.': '.$value->value)->implode(' · ') }}</p>
+<div class="pc-section-nav"><a href="{{ route('professional.inventory.reservations',['variant_id'=>$stockLevel->product_variant_id]) }}">{{ __('inventory.reservations') }}</a><a href="{{ route('professional.inventory.movements',['variant_id'=>$stockLevel->product_variant_id]) }}">{{ __('inventory.history') }}</a>@if($actor->hasPermission('products.view'))<a href="{{ route('professional.products.edit',$stockLevel->productVariant?->product_id) }}">{{ __('catalog.edit_product') }}</a>@endif</div>
+@if($actor->hasPermission('inventory.manage')&&!$actor->hasRole('CASHIER'))<div class="pc-form-actions"><a class="pc-button" href="{{ route('professional.inventory.receive',['stock_level_id'=>$stockLevel->id]) }}">＋ {{ __('inventory.receive') }}</a><a class="pc-secondary" href="{{ route('professional.inventory.adjust',['stock_level_id'=>$stockLevel->id]) }}">{{ __('inventory.adjust') }}</a></div>@endif</section>
+@endsection

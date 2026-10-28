@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\ProductVariant;
 use App\Models\User;
+use App\Support\CatalogPricing;
 
 class ProductVariantPolicy
 {
@@ -15,7 +16,7 @@ class ProductVariantPolicy
 
     public function create(User $user): bool
     {
-        return $user->hasPermission('products.update');
+        return CatalogPricing::writable($user) && $user->hasPermission('products.update');
     }
 
     public function update(User $user, ProductVariant $variant): bool

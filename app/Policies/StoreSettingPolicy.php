@@ -1,15 +1,16 @@
 <?php
-namespace App\Policies;
 
+namespace App\Policies;
 
 use App\Models\StoreSetting;
 use App\Models\User;
+use App\Support\StoreCustomizationAccess;
 
 class StoreSettingPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->store_id !== null
+        return StoreCustomizationAccess::readable($user)
             && $user->hasPermission('settings.view');
     }
 
@@ -17,13 +18,13 @@ class StoreSettingPolicy
         User $user,
         StoreSetting $setting
     ): bool {
-        return $user->hasPermission('settings.view')
+        return $this->viewAny($user)
             && $user->store_id === $setting->store_id;
     }
 
     public function create(User $user): bool
     {
-        return $user->store_id !== null
+        return StoreCustomizationAccess::owner($user)
             && $user->hasPermission('settings.update');
     }
 
@@ -31,7 +32,7 @@ class StoreSettingPolicy
         User $user,
         StoreSetting $setting
     ): bool {
-        return $user->hasPermission('settings.update')
+        return StoreCustomizationAccess::owner($user)
             && $user->store_id === $setting->store_id;
     }
 

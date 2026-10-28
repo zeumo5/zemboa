@@ -1,6 +1,7 @@
 @extends('marketplace.merchant.layout')
 @section('title', __('cart.title'))
 @section('content')
+@if(\App\Support\PublicShopping::allowed())
 <section class="merchant-section merchant-commerce commerce-cart">
   @include('marketplace.partials.cart-back')
   <div class="cart-heading"><h1>{{ __('cart.title') }}</h1></div><p class="commerce-intro">{{ __('cart.session_note') }}</p>
@@ -30,4 +31,5 @@
     <noscript><p>{{ __('cart.javascript') }}</p></noscript>
   </div>
 </section>
+@else<p class="workspace-preview">{{ __('access.shopping_blocked') }}</p>@endif
 @endsection

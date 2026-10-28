@@ -1,0 +1,28 @@
+<?php
+
+return [
+    'title' => 'Mon équipe', 'intro' => 'Gérez les accès professionnels de votre boutique.',
+    'invite' => 'Inviter un collaborateur', 'name' => 'Nom', 'email' => 'E-mail', 'phone' => 'Téléphone professionnel',
+    'role' => 'Rôle', 'status' => 'Statut du compte', 'invitation' => 'Invitation', 'created' => 'Créé le', 'actions' => 'Actions',
+    'search' => 'Rechercher un employé', 'filter' => 'Filtrer', 'all' => 'Tous', 'reset' => 'Réinitialiser', 'empty' => 'Aucun collaborateur ne correspond à ces critères.',
+    'roles' => ['STORE_OWNER' => 'Propriétaire', 'STORE_MANAGER' => 'Gestionnaire', 'CASHIER' => 'Caissier / Caissière', 'DELIVERY_AGENT' => 'Livreur'],
+    'statuses' => ['INVITED' => 'Invité', 'ACTIVE' => 'Actif', 'INACTIVE' => 'Accès désactivé'],
+    'states' => ['pending' => 'En attente', 'expired' => 'Expirée', 'absent' => 'Absente ou révoquée', 'accepted' => 'Acceptée', 'disabled' => 'Invitation désactivée'],
+    'resend' => 'Renvoyer l’invitation', 'revoke' => 'Révoquer le lien', 'disable' => 'Désactiver l’accès', 'enable' => 'Réactiver l’accès',
+    'invited' => 'Collaborateur invité.', 'resent' => 'Une nouvelle invitation a été envoyée.', 'revoked' => 'Le lien d’invitation est révoqué.',
+    'status_updated' => 'Statut du compte mis à jour.', 'role_updated' => 'Rôle mis à jour.', 'wait' => 'Patientez avant de renvoyer une invitation.',
+    'must_accept' => 'Une invitation doit être acceptée avant activation.', 'invalid_phone' => 'Indiquez un numéro mobile camerounais valide.',
+    'identity_conflict' => 'Ces coordonnées sont déjà utilisées. Aucun compte existant ne sera rattaché.',
+    'form_hint' => 'Le collaborateur définit lui-même son mot de passe via un lien temporaire. Aucun mot de passe ne lui est envoyé.',
+    'phone_hint' => 'Exemple de format : +237 6XX XX XX XX. Ce téléphone n’est pas vérifié par SMS.',
+    'state_hint' => 'L’absence de lien ne permet pas de distinguer une invitation jamais émise d’un lien révoqué. La création du compte n’est pas une date de dernière connexion.',
+    'manager_space' => 'Espace gestionnaire', 'your_role' => 'Votre rôle', 'role_hint' => 'Accès accordés par les permissions actuelles de votre boutique.',
+    'limits' => 'La gestion des employés reste réservée au propriétaire. Aucun accès financier ou administratif supplémentaire n’est accordé par cette interface.',
+    'activation_title' => 'Activer mon compte professionnel', 'activation_intro' => 'Définissez votre mot de passe pour rejoindre votre boutique.',
+    'password' => 'Mot de passe (12 caractères minimum)', 'confirmation' => 'Confirmer le mot de passe', 'activate' => 'Activer mon compte',
+    'activated' => 'Compte activé', 'activated_hint' => 'Votre mot de passe a été enregistré. Connectez-vous par le portail professionnel.', 'login' => 'Connexion professionnelle',
+    'invalid_invitation' => 'Invitation invalide, expirée ou non autorisée.',
+    'mail_subject' => 'Invitation à rejoindre ZEMBOA', 'mail_greeting' => 'Bienvenue sur ZEMBOA !',
+    'mail_intro' => 'Vous avez été invité à rejoindre une équipe sur ZEMBOA.', 'mail_action' => 'Définissez vous-même votre mot de passe avec ce lien sécurisé.',
+    'mail_expiry' => 'Ce lien expire après :minutes minutes.', 'mail_ignore' => 'Si vous ne connaissez pas cette invitation, ignorez cet e-mail.',
+];

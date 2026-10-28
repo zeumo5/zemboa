@@ -1,0 +1,2 @@
+<a href="{{ route('courier.index') }}" @if(request()->routeIs('courier.index','courier.show')) aria-current="page" @endif>@include('buyer.icon',['icon'=>'orders'])<span>{{ __('courier.missions') }}</span></a>
+<a href="{{ route('courier.history') }}" @if(request()->routeIs('courier.history')) aria-current="page" @endif>@include('buyer.icon',['icon'=>'grid'])<span>{{ __('courier.history') }}</span></a>

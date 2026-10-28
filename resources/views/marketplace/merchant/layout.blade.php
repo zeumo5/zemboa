@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token() }}">
+  @if($isStorePreview ?? false)<meta name="robots" content="noindex,nofollow"><base target="_blank">@endif
   <title>@yield('title', $store->name) — {{ $store->name }}</title>
   <meta name="description" content="{{ \Illuminate\Support\Str::limit($store->description ?: $store->slogan ?: $store->name, 160) }}">
   <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
   @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 @php
-  $merchantColor = preg_match('/^#[0-9a-fA-F]{6}$/', $settings?->primary_color ?? '') ? $settings->primary_color : '#0F6B57';
+  $merchantColor = \App\Support\StoreBranding::accent($settings?->primary_color);
   $navigationIcons = ['M3 10 12 3l9 7M5 9v12h5v-7h4v7h5V9','M5 7h14l2 14H3L5 7Zm3 0V5a4 4 0 0 1 8 0v2','M12 11v6m0-10v.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z','M1 4h13v13H1zM14 9h5l4 5v3h-9M8 19a2 2 0 1 1-4 0 2 2 0 0 1 4 0Zm13 0a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z'];
   $navigation = [
     ['marketplace.shops.show', 'marketplace.navigation_home'],
@@ -22,7 +23,7 @@
   <a class="zm-skip-link" href="#merchant-main">{{ __('marketplace.skip_to_content') }}</a>
   <header class="merchant-header">
     <a class="merchant-brand" href="{{ route('marketplace.shops.show', ['shopSlug' => $store->slug]) }}">
-      @if($settings?->logo_path)<img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($settings->logo_path) }}" width="52" height="52" alt="">@else<span class="merchant-monogram" aria-hidden="true">{{ mb_strtoupper(mb_substr(preg_replace('/^DEMO\s*-\s*/u', '', $store->name), 0, 1)) }}</span>@endif
+      @if($logoUrl = \App\Support\StoreBranding::url($settings,'logo'))<img src="{{ $logoUrl }}" width="52" height="52" alt="">@else<span class="merchant-monogram" aria-hidden="true">{{ mb_strtoupper(mb_substr(preg_replace('/^DEMO\s*-\s*/u', '', $store->name), 0, 1)) }}</span>@endif
       <span>{{ $store->name }}</span>
     </a>
     <form class="zm-search merchant-search" method="get" action="{{ route('marketplace.shops.products', ['shopSlug' => $store->slug]) }}">
@@ -41,6 +42,7 @@
     <aside class="merchant-sidebar" id="merchant-sidebar"><button class="merchant-sidebar-toggle" type="button" data-merchant-collapse aria-controls="merchant-sidebar-navigation" aria-expanded="true" aria-label="{{ __('marketplace.storefront.collapse_navigation') }}" data-collapse-label="{{ __('marketplace.storefront.collapse_navigation') }}" data-expand-label="{{ __('marketplace.storefront.expand_navigation') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m14 7-5 5 5 5"/></svg></button><p class="merchant-nav-caption">{{ __('marketplace.storefront.menu') }}</p><nav id="merchant-sidebar-navigation" aria-label="{{ __('marketplace.storefront.menu') }}">@include('marketplace.merchant.navigation')</nav><p class="merchant-sidebar-note">{{ $store->slogan ?: $store->name }}</p></aside>
     <main id="merchant-main" tabindex="-1">
       @if(app()->environment('demo'))<p class="zm-merchant-notice">{{ __('marketplace.storefront.demo') }}</p>@endif
+      @if(auth('web')->check())<div class="workspace-preview"><strong>{{ __('access.preview') }}</strong> @include('marketplace.partials.account-links')<p>{{ __('access.shopping_blocked') }}</p></div>@endif
       @yield('content')
     </main>
   </div>

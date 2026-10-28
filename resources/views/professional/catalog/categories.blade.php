@@ -1,0 +1,15 @@
+@extends('professional.layout')
+@section('title',__('catalog.categories'))
+@section('content')
+@php($canUpdate=$actor->hasPermission('categories.update')&&!$actor->hasRole('CASHIER'))
+@php($canDelete=$actor->hasPermission('categories.delete')&&!$actor->hasRole('CASHIER'))
+@php($canProducts=$actor->hasPermission('products.view'))
+<div class="pc-heading"><div><p class="pro-eyebrow">{{ $store->name }} / {{ __('professional.categories') }}</p><h1>{{ __('catalog.categories') }}</h1><p>{{ __('catalog.category_hint') }}</p></div>@if(\Illuminate\Support\Facades\Gate::allows('create',\App\Models\Category::class) && !$actor->hasRole('CASHIER'))<a class="pc-button" href="{{ route('professional.categories.create') }}">＋ {{ __('catalog.add_category') }}</a>@endif</div>
+@include('professional.catalog.feedback')
+<section class="pro-panel pc-panel"><form class="pc-filters" method="get" action="{{ route('professional.categories.index') }}"><label class="pc-search">{{ __('catalog.search_category') }}<input type="search" name="q" maxlength="100" value="{{ $filters['q']??'' }}"></label><label>{{ __('catalog.status') }}<select name="status"><option value="">{{ __('catalog.all_statuses') }}</option>@foreach(['ACTIVE','INACTIVE'] as $state)<option value="{{ $state }}" @selected(($filters['status']??'')===$state)>{{ __('catalog.'.$state) }}</option>@endforeach</select></label><button class="pc-button" type="submit">{{ __('catalog.filter') }}</button><a class="pc-link" href="{{ route('professional.categories.index') }}">{{ __('catalog.reset') }}</a></form>
+<p class="pc-count">{{ __('catalog.results',['count'=>$categories->total()]) }}</p><div class="pc-categories">@forelse($categories as $category)<article class="pc-category"><span class="pc-category-icon" aria-hidden="true">▧</span><div><h2>{{ $category->name }}</h2><p>{{ __('catalog.products_count',['count'=>$category->products_count]) }}</p><p>{{ $category->description }}</p><span class="pc-status {{ $category->status==='ACTIVE'?'is-active':'' }}">{{ __('catalog.'.$category->status) }}</span></div><div class="pc-row-actions">
+@if($canProducts)<a class="pc-link" href="{{ route('professional.products.index',['category_id'=>$category->id]) }}">{{ __('professional.products') }} →</a>@endif
+@if($canUpdate)<a class="pc-link" href="{{ route('professional.categories.edit',$category) }}">{{ __('catalog.edit') }}</a>@endif
+@if($canDelete)@if($category->products_count===0)<form method="post" action="{{ route('professional.categories.destroy',$category) }}" data-catalog-confirm="{{ __('catalog.confirm_delete') }}">@csrf @method('DELETE')<input type="hidden" name="version" value="{{ \App\Support\CatalogAccess::version($category) }}"><button class="pc-danger" type="submit">{{ __('catalog.delete') }}</button></form>@else<small>{{ __('catalog.contains_products') }}</small>@endif @endif
+</div></article>@empty<div class="pc-empty"><h2>{{ __('catalog.empty') }}</h2><p>{{ __('catalog.empty_hint') }}</p></div>@endforelse</div>{{ $categories->links() }}</section>
+@endsection

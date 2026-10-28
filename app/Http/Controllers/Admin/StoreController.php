@@ -2,21 +2,27 @@
 
 namespace App\Http\Controllers\Admin;
 
-use Illuminate\Validation\ValidationException;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\Store;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
 
 class StoreController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse|View
     {
+        $filters = $request->validate(['q' => ['nullable', 'string', 'max:150'], 'status' => ['nullable', 'in:PENDING,ACTIVE,INACTIVE,SUSPENDED']]);
         $stores = Store::query()
+            ->when($filters['q'] ?? null, fn ($q, $value) => $q->where(fn ($q) => $q->where('name', 'like', '%'.$value.'%')->orWhere('slug', 'like', '%'.$value.'%')))
+            ->when($filters['status'] ?? null, fn ($q, $value) => $q->where('status', $value))
+            ->with(['users' => fn ($query) => $query->whereHas('roles', fn ($q) => $q->where('code', 'STORE_OWNER'))->select(['id', 'store_id', 'name', 'email', 'status'])])
             ->select([
                 'id',
                 'name',
@@ -25,12 +31,23 @@ class StoreController extends Controller
                 'created_at',
             ])
             ->orderByDesc('id')
-            ->paginate(20);
+            ->paginate(20)->withQueryString();
+
+        if (! $request->expectsJson()) {
+            return view('admin.stores.index', compact('stores', 'filters'));
+        }
+
+        $stores->getCollection()->each(fn ($store) => $store->unsetRelation('users'));
 
         return response()->json($stores);
     }
 
-    public function store(Request $request): JsonResponse
+    public function create(): View
+    {
+        return view('admin.stores.create');
+    }
+
+    public function store(Request $request): JsonResponse|RedirectResponse
     {
         $data = $request->validate([
             'name' => [
@@ -76,6 +93,10 @@ class StoreController extends Controller
             ],
         ]);
 
+        if (User::whereRaw('LOWER(email) = ?', [mb_strtolower($data['owner_email'])])->exists()) {
+            throw ValidationException::withMessages(['owner_email' => __('admin.email_used')]);
+        }
+
         $result = DB::transaction(function () use ($data) {
             $ownerRole = Role::query()
                 ->where('code', 'STORE_OWNER')
@@ -93,7 +114,7 @@ class StoreController extends Controller
                 'status' => 'PENDING',
             ]);
 
-            $owner = new User();
+            $owner = new User;
 
             // Le store_id est défini par le serveur.
             $owner->store_id = $store->id;
@@ -120,9 +141,12 @@ class StoreController extends Controller
         $store = $result['store'];
         $owner = $result['owner'];
 
+        if (! $request->expectsJson()) {
+            return redirect()->route('admin.stores.show', ['storeId' => $store->id])->with('success', __('admin.created'));
+        }
+
         return response()->json([
-            'message' =>
-            'Boutique créée en attente de validation.',
+            'message' => 'Boutique créée en attente de validation.',
             'store' => [
                 'id' => $store->id,
                 'name' => $store->name,
@@ -139,7 +163,7 @@ class StoreController extends Controller
         ], 201);
     }
 
-    public function show(int $storeId): JsonResponse
+    public function show(Request $request, int $storeId): JsonResponse|View
     {
         $store = Store::query()->findOrFail($storeId);
 
@@ -155,6 +179,14 @@ class StoreController extends Controller
                 'status',
                 'email_verified_at',
             ]);
+
+        if (! $request->expectsJson()) {
+            $events = DB::table('store_status_events')->where('store_id', $store->id)->latest('id')->paginate(10);
+            $invitationLinks = DB::table(config('auth.passwords.users.table'))->whereIn('email', $owners->pluck('email'))
+                ->get(['email', 'created_at'])->keyBy('email');
+
+            return view('admin.stores.show', compact('store', 'owners', 'events', 'invitationLinks'));
+        }
 
         return response()->json([
             'store' => [
@@ -172,11 +204,10 @@ class StoreController extends Controller
         ]);
     }
 
-
     public function updateStatus(
         Request $request,
         int $storeId
-    ): JsonResponse {
+    ): JsonResponse|RedirectResponse {
         $data = $request->validate([
             'status' => [
                 'required',
@@ -208,8 +239,7 @@ class StoreController extends Controller
             // Ne pas enregistrer de fausse transition.
             if ($oldStatus === $newStatus) {
                 throw ValidationException::withMessages([
-                    'status' =>
-                    'La boutique possède déjà ce statut.',
+                    'status' => 'La boutique possède déjà ce statut.',
                 ]);
             }
 
@@ -228,8 +258,7 @@ class StoreController extends Controller
 
                 if ($owners->count() !== 1) {
                     throw ValidationException::withMessages([
-                        'status' =>
-                        'Un propriétaire unique est requis.',
+                        'status' => 'Un propriétaire unique est requis.',
                     ]);
                 }
 
@@ -239,12 +268,11 @@ class StoreController extends Controller
                     $owner->status !== 'ACTIVE' ||
                     $owner->email_verified_at === null ||
                     $owner->roles()
-                    ->where('code', '!=', 'STORE_OWNER')
-                    ->exists()
+                        ->where('code', '!=', 'STORE_OWNER')
+                        ->exists()
                 ) {
                     throw ValidationException::withMessages([
-                        'status' =>
-                        'Le propriétaire doit être activé et posséder uniquement le rôle STORE_OWNER.',
+                        'status' => 'Le propriétaire doit être activé et posséder uniquement le rôle STORE_OWNER.',
                     ]);
                 }
             }
@@ -266,6 +294,10 @@ class StoreController extends Controller
 
             return $store;
         });
+
+        if (! $request->expectsJson()) {
+            return redirect()->route('admin.stores.show', ['storeId' => $store->id])->with('success', __('admin.status_updated'));
+        }
 
         return response()->json([
             'message' => 'Statut de la boutique mis à jour.',

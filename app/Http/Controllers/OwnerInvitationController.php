@@ -1,6 +1,6 @@
 <?php
-namespace App\Http\Controllers;
 
+namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -56,6 +56,7 @@ class OwnerInvitationController extends Controller
         }
 
         return view('owner-invitations.accept', [
+            'invitationStore' => $owner->store,
             'token' => $token,
             'email' => $email,
         ]);
@@ -86,13 +87,13 @@ class OwnerInvitationController extends Controller
                 'email' => $data['email'],
                 'token' => $token,
                 'password' => $data['password'],
-                'password_confirmation' =>
-                    $request->input('password_confirmation'),
+                'password_confirmation' => $request->input('password_confirmation'),
             ],
-            function (User $user, string $password): void {
+            function (User $user, string $password) use ($token): void {
                 DB::transaction(function () use (
                     $user,
-                    $password
+                    $password,
+                    $token
                 ): void {
                     $owner = User::query()
                         ->whereKey($user->id)
@@ -105,7 +106,8 @@ class OwnerInvitationController extends Controller
 
                     if (
                         $eligible === null ||
-                        $eligible->id !== $owner->id
+                        $eligible->id !== $owner->id ||
+                        ! Password::broker('users')->tokenExists($owner, $token)
                     ) {
                         throw ValidationException::withMessages([
                             'email' => 'Invitation non autorisée.',
