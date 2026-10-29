@@ -81,6 +81,6 @@ return new class extends Migration
         }
         // Portable deterministic scalar functions; no REGEXP dependency in generated DDL.
         $digits = implode(' AND ', array_map(fn ($i) => "ASCII(SUBSTR($clean, -$i, 1)) BETWEEN 48 AND 57", range(1, 9)));
-        return "CASE WHEN is_buyer = 1 AND $digits THEN CASE WHEN LENGTH($clean) = 9 AND HEX(SUBSTR($clean, 1, 1)) = '36' THEN $local WHEN LENGTH($clean) = 12 AND HEX(SUBSTR($clean, 1, 4)) = '32333736' THEN $international WHEN LENGTH($clean) = 13 AND HEX(SUBSTR($clean, 1, 5)) = '2B32333736' THEN $clean ELSE NULL END ELSE NULL END";
+        return "CASE WHEN is_buyer = 1 AND $digits THEN CASE WHEN LENGTH($clean) = 9 AND HEX(SUBSTR($clean, 1, 1)) = _binary'36' THEN $local WHEN LENGTH($clean) = 12 AND HEX(SUBSTR($clean, 1, 4)) = _binary'32333736' THEN $international WHEN LENGTH($clean) = 13 AND HEX(SUBSTR($clean, 1, 5)) = _binary'2B32333736' THEN $clean ELSE NULL END ELSE NULL END";
     }
 };
